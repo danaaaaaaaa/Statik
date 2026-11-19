@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- iPhone: als App auf dem Home-Bildschirm nutzbar -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Statik">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1f4e79">
+  <title>Statik-Rechner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Statik-Rechner</h1>
+    <nav>
+      <button class="tab aktiv" data-tab="spannung">Spannungen &amp; 3D</button>
+      <button class="tab" data-tab="werte">Querschnittswerte</button>
+      <button class="tab" data-tab="stahlbeton">Stahlbeton</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===== Tab 1: Elastische Spannungsberechnung ===== -->
+    <section id="tab-spannung" class="tab-inhalt aktiv">
+      <div class="eingabe">
+        <h2>Querschnitt</h2>
+        <label>Form <select id="qs-typ"></select></label>
+        <div id="qs-felder" class="raster"></div>
+        <div id="qs-kennwerte" class="kennwerte"></div>
+
+        <h2>Schnittgrößen</h2>
+        <div class="raster">
+          <label>N [kN] (Zug +)<input type="number" id="in-N" value="0" step="any"></label>
+          <label>M<sub>y</sub> [kNm]<input type="number" id="in-My" value="50" step="any"></label>
+          <label>M<sub>z</sub> [kNm]<input type="number" id="in-Mz" value="10" step="any"></label>
+        </div>
+        <p class="hinweis">Koordinaten im Schwerpunkt, y nach rechts, z nach unten.
+          M<sub>y</sub> &gt; 0: Zug unten (z &gt; 0). M<sub>z</sub> &gt; 0: Zug rechts (y &gt; 0).
+          Spannungen: Zug +, Druck −.</p>
+
+        <h2>Punkte</h2>
+        <div class="raster">
+          <label>y [mm]<input type="number" id="pt-y" value="0" step="any"></label>
+          <label>z [mm]<input type="number" id="pt-z" value="0" step="any"></label>
+        </div>
+        <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
+        <table id="pt-tabelle">
+          <thead><tr><th>Punkt</th><th>y [mm]</th><th>z [mm]</th><th>σ [N/mm²]</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="hinweis" id="pt-hinweis"></p>
+      </div>
+
+      <div class="ansicht">
+        <div class="knoepfe">
+          <button class="knopf" data-ansicht="-35,25">3D</button>
+          <button class="knopf" data-ansicht="0,0">Vorne</button>
+          <button class="knopf" data-ansicht="90,0">Seite</button>
+          <button class="knopf" data-ansicht="0,89">Oben</button>
+          <button class="knopf" id="zoom-plus">＋</button>
+          <button class="knopf" id="zoom-minus">−</button>
+        </div>
+        <canvas id="canvas3d"></canvas>
+        <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Grau: Querschnitt,
+          farbig: Spannungsfläche, grün gestrichelt: Nulllinie. „Seite“ zeigt den Verlauf über die Höhe.</p>
+        <div id="sp-extrem" class="kennwerte"></div>
+      </div>
+    </section>
+
+    <!-- ===== Tab 2: Querschnittswerte ===== -->
+    <section id="tab-werte" class="tab-inhalt">
+      <div class="eingabe">
+        <h2>Querschnitt</h2>
+        <label>Form <select id="qw-typ"></select></label>
+        <div id="qw-felder" class="raster"></div>
+        <p class="hinweis">Alle Werte werden automatisch berechnet. Bezugsachsen: Schwerachsen y (horizontal)
+          und z (vertikal). Alle Querschnitte sind symmetrisch, y und z sind damit Hauptachsen.</p>
+      </div>
+      <div class="ansicht">
+        <div id="qw-tabelle" class="ergebnis"></div>
+        <canvas id="qw-skizze" style="height:300px"></canvas>
+      </div>
+    </section>
+
+    <!-- ===== Tab 3: Stahlbeton-Biegebemessung ===== -->
+    <section id="tab-stahlbeton" class="tab-inhalt">
+      <div class="eingabe">
+        <h2>Querschnitt</h2>
+        <label>Form
+          <select id="sb-typ">
+            <option value="rechteck">Rechteck</option>
+            <option value="plattenbalken">Plattenbalken</option>
+          </select>
+        </label>
+        <div class="raster">
+          <label><span id="sb-lbl-b">Breite b [cm]</span><input type="number" id="sb-b" value="30" step="any"></label>
+          <label>Höhe h [cm]<input type="number" id="sb-h" value="60" step="any"></label>
+          <label class="nur-pb versteckt">Gurtbreite b<sub>eff</sub> [cm]<input type="number" id="sb-bf" value="120" step="any"></label>
+          <label class="nur-pb versteckt">Gurtdicke h<sub>f</sub> [cm]<input type="number" id="sb-hf" value="20" step="any"></label>
+          <label>d<sub>1</sub> Zugbewehrung [cm]<input type="number" id="sb-d1" value="5" step="any"></label>
+          <label>d<sub>2</sub> Druckbewehrung [cm]<input type="number" id="sb-d2" value="5" step="any"></label>
+        </div>
+        <p class="hinweis">d<sub>1</sub>/d<sub>2</sub> = Abstand Bewehrungsschwerpunkt zum jeweiligen Rand.
+          Platte: b = 100 cm setzen, A<sub>s</sub> gilt dann je Meter.</p>
+
+        <h2>Baustoffe</h2>
+        <div class="raster">
+          <label>Beton<select id="sb-beton"></select></label>
+          <label>Betonstahl<select id="sb-stahl"><option>B500B</option></select></label>
+        </div>
+
+        <h2>Einwirkung</h2>
+        <label>M<sub>Ed</sub> [kNm] (negativ = Zug oben)<input type="number" id="sb-M" value="250" step="any"></label>
+      </div>
+
+      <div class="ansicht">
+        <div id="sb-ergebnis" class="ergebnis"></div>
+        <canvas id="sb-skizze" style="height:380px"></canvas>
+        <p class="hinweis">Links: Querschnitt mit Druckzone (blau, Spannungsblock λ·x), Dehnungsnulllinie x
+          (gestrichelt), Zugbewehrung (rot) und Druckbewehrung (dunkelblau).
+          Rechts: Dehnungsebene, Druck links, Zug rechts.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="util.js"></script>
+  <script src="querschnitte.js"></script>
+  <script src="spannung.js"></script>
+  <script src="ansicht3d.js"></script>
+  <script src="stahlbeton.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
