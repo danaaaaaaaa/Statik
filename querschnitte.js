@@ -1,15 +1,107 @@
 "use strict";
 
 /**
- * querschnitte.js - Querschnittsklassen für die elastische Spannungsberechnung.
+ * querschnitte.js - Querschnittsklassen für Spannungs-, Querschnittswert- und Tragfähigkeitsberechnung.
  *
  * Lokales Koordinatensystem beim Aufbau: Ursprung links oben, y nach rechts, z nach UNTEN.
  * Nach außen (Spannungen, 3D) gelten Schwerpunktkoordinaten (Ursprung im Schwerpunkt).
- * Jeder Querschnitt setzt sich aus Teilflächen zusammen (positiv = Material,
- * negativ = Aussparung). Alle Querschnitte sind symmetrisch zur vertikalen Achse
- * (deshalb ist das Deviationsmoment Iyz = 0).
- * Einheiten: mm, mm², mm⁴.
+ * Jeder Querschnitt setzt sich aus Teilflächen zusammen (positiv = Material, negativ = Aussparung).
+ * Alle Querschnitte besitzen mindestens eine Symmetrieachse parallel zu y oder z; die Schwerachsen
+ * sind damit Hauptachsen (Deviationsmoment Iyz = 0).
+ * Einheiten: mm, mm², mm³, mm⁴.
+ *
+ * Inhalt:
+ *  - Geometrie       : Polygon-Hilfsfunktionen (Kennwerte, Beschneiden, Ausrundungen)
+ *  - Teilflaeche     : RechteckTeil, KreisTeil, PolygonTeil
+ *  - Klassifizierung : Querschnittsklassen nach EN 1993-1-1, Tab. 5.2
+ *  - Querschnitt     : Basisklasse (Kennwerte, plastisches Widerstandsmoment, Raster)
+ *  - Parametrische Querschnitte (Rechteck, T, Doppel-T, Kasten, Kreis, Rohr)
+ *  - QUERSCHNITTE    : Register (profile.js ergänzt die Walzprofile)
  */
+
+/* ======================= Polygon-Geometrie ======================= */
+
+class Geometrie {
+  /** Fläche, Schwerpunkt und Eigenträgheitsmomente eines Polygons (Trapezformeln). */
+  static kennwerte(p) {
+    let a = 0, sy = 0, sz = 0, iyy = 0, izz = 0;
+    for (let i = 0; i < p.length; i++) {
+      const u = p[i], v = p[(i + 1) % p.length];
+      const c = u.y * v.z - v.y * u.z;                    // Kreuzprodukt der Eckpunkte
+      a += c;
+      sy += (u.y + v.y) * c;
+      sz += (u.z + v.z) * c;
+      iyy += (u.z * u.z + u.z * v.z + v.z * v.z) * c;     // ∫ z² dA (bezogen auf den Ursprung)
+      izz += (u.y * u.y + u.y * v.y + v.y * v.y) * c;     // ∫ y² dA (bezogen auf den Ursprung)
+    }
+    const As = a / 2, A = Math.abs(As), s = As < 0 ? -1 : 1; // s = Umlaufsinn
+    if (A < 1e-12) return { A: 0, y: 0, z: 0, Iy: 0, Iz: 0 };
+    const cy = sy / (6 * As), cz = sz / (6 * As);
+    return { A, y: cy, z: cz, Iy: s * iyy / 12 - A * cz * cz, Iz: s * izz / 12 - A * cy * cy };
+  }
+
+  /** Beschneidet ein Polygon auf den Bereich "Koordinate achse <= g" (Sutherland-Hodgman). */
+  static beschneide(p, achse, g) {
+    const out = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      const fa = a[achse] - g, fb = b[achse] - g;
+      if (fa <= 0) out.push(a);
+      if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) {
+        const t = fa / (fa - fb);
+        out.push({ y: a.y + t * (b.y - a.y), z: a.z + t * (b.z - a.z) });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Anteil des Polygons mit Koordinate < g (achse = 'z': oberhalb einer waagerechten Linie,
+   * achse = 'y': links einer senkrechten Linie).
+   * @returns {{A:number, S:number}} Fläche A und statisches Moment S = ∫ (g - Koordinate) dA bezogen auf g
+   */
+  static anteil(p, achse, g) {
+    const q = this.beschneide(p, achse, g);
+    if (q.length < 3) return { A: 0, S: 0 };
+    const k = this.kennwerte(q);
+    return { A: k.A, S: k.A * (g - k[achse]) };
+  }
+
+  /**
+   * Rundet die Ecken eines Polygons mit Kreisbögen aus.
+   * @param {Array} ecken Eckpunkte {y, z, r} (r > 0: Ausrundungsradius an dieser Ecke)
+   * @param {number} n Segmente je Bogen
+   * @returns {Array} Punkte {y, z} des ausgerundeten Polygons
+   */
+  static runde(ecken, n = 12) {
+    const out = [], m = ecken.length;
+    const einheit = (A, B) => {
+      const dy = B.y - A.y, dz = B.z - A.z, l = Math.hypot(dy, dz);
+      return { y: dy / l, z: dz / l };
+    };
+    for (let i = 0; i < m; i++) {
+      const P = ecken[i], V = ecken[(i + m - 1) % m], N = ecken[(i + 1) % m];
+      if (!(P.r > 0)) { out.push({ y: P.y, z: P.z }); continue; }
+      const a = einheit(P, V), b = einheit(P, N);                         // Richtungen zu den Nachbarn
+      const phi = Math.acos(Math.max(-1, Math.min(1, a.y * b.y + a.z * b.z))); // Öffnungswinkel
+      const t = P.r / Math.tan(phi / 2);                                  // Tangentenlänge
+      const e = { y: a.y + b.y, z: a.z + b.z }, le = Math.hypot(e.y, e.z);
+      const dm = P.r / Math.sin(phi / 2);                                 // Abstand Eckpunkt - Bogenmittelpunkt
+      const C = { y: P.y + e.y / le * dm, z: P.z + e.z / le * dm };       // Bogenmittelpunkt
+      const T1 = { y: P.y + a.y * t, z: P.z + a.z * t };
+      const T2 = { y: P.y + b.y * t, z: P.z + b.z * t };
+      const w1 = Math.atan2(T1.z - C.z, T1.y - C.y);
+      let dw = Math.atan2(T2.z - C.z, T2.y - C.y) - w1;
+      while (dw > Math.PI) dw -= 2 * Math.PI;
+      while (dw < -Math.PI) dw += 2 * Math.PI;
+      for (let k = 0; k <= n; k++) {
+        const w = w1 + dw * k / n;
+        out.push({ y: C.y + P.r * Math.cos(w), z: C.z + P.r * Math.sin(w) });
+      }
+    }
+    return out;
+  }
+}
 
 /* ======================= Teilflächen ======================= */
 
@@ -24,8 +116,11 @@ class Teilflaeche {
   iEigenZ() { throw new Error("nicht implementiert"); } // um die eigene vertikale Achse
   enthaelt(y, z) { throw new Error("nicht implementiert"); }
   randpunkte(n) { throw new Error("nicht implementiert"); }
-  /** Statisches Moment des Anteils oberhalb der Grenze zg (lokales z, nach unten) bezogen auf zg. */
-  momentOberhalb(zg) { throw new Error("nicht implementiert"); }
+
+  /** Anteil mit Koordinate < g (siehe Geometrie.anteil), hier über die Randpunkte berechnet. */
+  anteil(achse, g) {
+    return Geometrie.anteil(this.randpunkte(720), achse, g);
+  }
 }
 
 /** Rechteckige Teilfläche, (y, z) = linke obere Ecke. */
@@ -44,10 +139,6 @@ class RechteckTeil extends Teilflaeche {
   randpunkte() {
     const { y, z, b, h } = this;
     return [{ y, z }, { y: y + b, z }, { y: y + b, z: z + h }, { y, z: z + h }];
-  }
-  momentOberhalb(zg) {
-    const hh = Math.min(Math.max(zg - this.z, 0), this.h); // Höhe des Anteils oberhalb zg
-    return this.b * hh * (zg - (this.z + hh / 2));
   }
 }
 
@@ -70,18 +161,96 @@ class KreisTeil extends Teilflaeche {
     }
     return p;
   }
-  /** Numerische Integration in dünnen Streifen (Fehler vernachlässigbar). */
-  momentOberhalb(zg) {
-    const r = this.d / 2, z0 = this.cz - r, z1 = Math.min(zg, this.cz + r);
-    if (z1 <= z0) return 0;
-    const n = 2000, dz = (z1 - z0) / n;
-    let s = 0;
-    for (let i = 0; i < n; i++) {
-      const zm = z0 + (i + 0.5) * dz;
-      const breite = 2 * Math.sqrt(Math.max(0, r * r - (zm - this.cz) ** 2));
-      s += breite * dz * (zg - zm);
+}
+
+/** Beliebige Teilfläche, begrenzt durch ein Polygon (z. B. Walzprofil mit Ausrundungen). */
+class PolygonTeil extends Teilflaeche {
+  /** @param {Array} punkte Eckpunkte {y, z} im lokalen Koordinatensystem */
+  constructor(punkte, vz = 1) {
+    super(vz);
+    this.p = punkte;
+    this.k = Geometrie.kennwerte(punkte);
+  }
+  flaeche() { return this.k.A; }
+  schwerpunkt() { return { y: this.k.y, z: this.k.z }; }
+  iEigenY() { return this.k.Iy; }
+  iEigenZ() { return this.k.Iz; }
+  randpunkte() { return this.p; }
+  /** Punkt-in-Polygon-Test (Strahlverfahren). */
+  enthaelt(y, z) {
+    const p = this.p;
+    let innen = false;
+    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+      if ((p[i].z > z) !== (p[j].z > z) &&
+          y < (p[j].y - p[i].y) * (z - p[i].z) / (p[j].z - p[i].z) + p[i].y) innen = !innen;
     }
-    return s;
+    return innen;
+  }
+}
+
+/* ======================= Querschnittsklassen (EN 1993-1-1, Tab. 5.2) ======================= */
+
+class Klassifizierung {
+  /** ε = √(235 / f_y) */
+  static eps(fy) { return Math.sqrt(235 / fy); }
+
+  // Grenzwerte c/t für Klasse 1, 2, 3 als Vielfache von ε
+  static get AUSSTEHEND() { return [9, 10, 14]; }       // gedrückter, einseitig gestützter Flansch (gewalzt/geschweißt)
+  static get STEG_BIEGUNG() { return [72, 83, 124]; }   // Steg bzw. Wand unter reiner Biegung
+  static get INNEN_DRUCK() { return [33, 38, 42]; }     // beidseitig gestützter Teil unter gleichmäßigem Druck
+  static get ROHR() { return [50, 70, 90]; }            // Kreisrohr: d/t gegen Vielfache von ε²
+
+  /** Einzelnachweis: Verhältnis c/t gegen die Grenzwerte -> Klasse 1 bis 4. */
+  static teil(ct, grenzen, eps) {
+    let klasse = 4;
+    for (let i = 0; i < 3; i++) if (ct <= grenzen[i] * eps) { klasse = i + 1; break; }
+    return { ct, klasse };
+  }
+
+  /** Fasst Einzelnachweise zusammen: maßgebend ist die ungünstigste Klasse. */
+  static fasse(teile) {
+    return { klasse: Math.max(...teile.map(t => t.klasse)), teile };
+  }
+
+  /** Vollquerschnitte (Rechteck, Kreis): keine Beulgefahr, Klasse 1. */
+  static vollquerschnitt() {
+    const k = { klasse: 1, teile: [], hinweis: "Vollquerschnitt (keine Beulgefahr)" };
+    return { biegungY: k, biegungZ: k, druck: k };
+  }
+
+  /**
+   * I-/H- und U-Querschnitte.
+   * @param {number} cf Flanschüberstand (c), tf Flanschdicke, d Stegmaß (c), tw Stegdicke
+   * Biegung um z: konservativ nur der Flansch (Druckgrenzwerte).
+   */
+  static iProfil(cf, tf, d, tw, eps) {
+    const fl = this.teil(cf / tf, this.AUSSTEHEND, eps);
+    const stB = this.teil(d / tw, this.STEG_BIEGUNG, eps);
+    const stD = this.teil(d / tw, this.INNEN_DRUCK, eps);
+    return {
+      biegungY: this.fasse([{ name: "Flansch", ...fl }, { name: "Steg", ...stB }]),
+      biegungZ: this.fasse([{ name: "Flansch", ...fl }]),
+      druck: this.fasse([{ name: "Flansch", ...fl }, { name: "Steg", ...stD }]),
+    };
+  }
+
+  /** Rechteck-Hohlquerschnitte: cb, ch = gerade Wandbreiten (Breite b bzw. Höhe h), t = Wanddicke. */
+  static hohlkasten(cb, ch, t, eps) {
+    const druckB = this.teil(cb / t, this.INNEN_DRUCK, eps);  // Wand der Breite b unter Druck
+    const druckH = this.teil(ch / t, this.INNEN_DRUCK, eps);  // Wand der Höhe h unter Druck
+    const biegB = this.teil(cb / t, this.STEG_BIEGUNG, eps);  // Wand der Breite b unter Biegung
+    const biegH = this.teil(ch / t, this.STEG_BIEGUNG, eps);  // Wand der Höhe h unter Biegung
+    return {
+      biegungY: this.fasse([{ name: "Gurt (Breite)", ...druckB }, { name: "Steg (Höhe)", ...biegH }]),
+      biegungZ: this.fasse([{ name: "Gurt (Höhe)", ...druckH }, { name: "Steg (Breite)", ...biegB }]),
+      druck: this.fasse([{ name: "Wand (Breite)", ...druckB }, { name: "Wand (Höhe)", ...druckH }]),
+    };
+  }
+
+  /** Kreisrohr: Verhältnis d/t. */
+  static rohr(d, t, eps) {
+    const k = this.fasse([{ name: "Rohr d/t", ...this.teil(d / t, this.ROHR, eps * eps) }]);
+    return { biegungY: k, biegungZ: k, druck: k };
   }
 }
 
@@ -99,12 +268,18 @@ class Querschnitt {
 
   /** Anzeigename (in Unterklassen überschreiben). */
   static get titel() { return "Querschnitt"; }
-  /** Eingabefelder {id, label, wert} (in Unterklassen überschreiben). */
+  /** Gruppe in der Auswahlliste. */
+  static get gruppe() { return "Parametrische Querschnitte"; }
+  /**
+   * Eingabefelder (in Unterklassen überschreiben):
+   * {id, label, wert} für Zahlenfelder, zusätzlich {optionen: [...]} für eine Auswahlliste.
+   */
   static get felder() { return []; }
 
   /** Plausibilitätsprüfung; gibt Fehlertext oder null zurück. */
   pruefe() {
     for (const f of this.constructor.felder) {
+      if (f.optionen) continue; // Auswahlfelder prüfen die Unterklassen selbst
       if (!(this.w[f.id] > 0)) return `${f.label} muss größer 0 sein.`;
     }
     return null;
@@ -112,6 +287,12 @@ class Querschnitt {
 
   /** Teilflächen aufbauen (in Unterklassen überschreiben). */
   erzeugeTeile() { throw new Error("nicht implementiert"); }
+
+  /** Querschnittsklassen nach EN 1993-1-1 (null = nicht ermittelbar; in Unterklassen überschreiben). */
+  klassen(fy) { return null; }
+
+  /** Schubflächen {z, y, hinweis} in mm² nach EN 1993-1-1, 6.2.6(3) (null = nicht ermittelbar). */
+  schubflaechen() { return null; }
 
   /** Fläche, Schwerpunkt, Trägheitsmomente und Umrandung berechnen. */
   _kennwerte() {
@@ -145,14 +326,62 @@ class Querschnitt {
   get Wyo() { return this.Iy / Math.abs(this.zmin); }   // oben
   get Wyu() { return this.Iy / this.zmax; }             // unten
   get Wz() { return this.Iz / Math.max(Math.abs(this.ymin), this.ymax); }
+  get Wely() { return Math.min(this.Wyo, this.Wyu); }   // elastisches Widerstandsmoment (kleinerer Wert)
+  get Welz() { return this.Wz; }
   get iy() { return Math.sqrt(this.Iy / this.A); }      // Trägheitsradius
   get iz() { return Math.sqrt(this.Iz / this.A); }
   get Ip() { return this.Iy + this.Iz; }                // polares Flächenmoment
+  get masse() { return this.A * 7850e-6; }              // Masse je Meter für Stahl (7850 kg/m³) in kg/m
+  get Wply() { return this.plastisch("y").W; }          // plastisches Widerstandsmoment um y
+  get Wplz() { return this.plastisch("z").W; }          // plastisches Widerstandsmoment um z
+
   /** Statisches Moment der Fläche oberhalb der Schwerachse (maßgebend für Schubspannungen). */
   get Sy() {
     let s = 0;
-    for (const t of this.teile) s += t.vz * t.momentOberhalb(this.zs);
+    for (const t of this.teile) s += t.vz * t.anteil("z", this.zs).S;
     return s;
+  }
+
+  /**
+   * Plastische Nulllinie und plastisches Widerstandsmoment (reine Biegung, N = 0).
+   * Die plastische Nulllinie teilt die Fläche in zwei gleich große Hälften.
+   * @param {string} achse 'y' = Biegung um y (waagerechte Nulllinie), 'z' = Biegung um z (senkrechte Nulllinie)
+   * @returns {{W:number, lage:number}} W in mm³, lage = Abstand der Nulllinie vom Schwerpunkt in mm
+   */
+  plastisch(achse) {
+    if (!this._plCache) this._plCache = {};
+    if (this._plCache[achse]) return this._plCache[achse];
+
+    const ko = achse === "y" ? "z" : "y";                    // Koordinate, in der geschnitten wird
+    const off = ko === "z" ? this.zs : this.ys;              // Schwerpunktlage (lokal)
+    const lo = (ko === "z" ? this.zmin : this.ymin) + off;   // Grenzen in lokalen Koordinaten
+    const hi = (ko === "z" ? this.zmax : this.ymax) + off;
+
+    // Fläche A und statisches Moment S aller Teile mit Koordinate < g
+    const bis = g => {
+      let A = 0, S = 0;
+      for (const t of this.teile) { const r = t.anteil(ko, g); A += t.vz * r.A; S += t.vz * r.S; }
+      return { A, S };
+    };
+
+    // Nulllinie so bestimmen, dass beide Hälften gleich groß sind (Intervallhalbierung)
+    const halbe = bis(hi + 1).A / 2;
+    let a = lo, b = hi;
+    for (let i = 0; i < 60; i++) {
+      const m = (a + b) / 2;
+      if (bis(m).A < halbe) a = m; else b = m;
+    }
+    const g = (a + b) / 2;
+
+    // W_pl = Moment der einen Hälfte + Moment der anderen Hälfte (jeweils um die Nulllinie)
+    const eine = bis(g).S;
+    let andere = 0;
+    for (const t of this.teile) {
+      const c = t.schwerpunkt()[ko];
+      andere += t.vz * (t.flaeche() * (c - g) + t.anteil(ko, g).S);
+    }
+    this._plCache[achse] = { W: eine + andere, lage: g - off };
+    return this._plCache[achse];
   }
 
   /** Punkt (Schwerpunktkoordinaten) im Querschnitt? */
@@ -185,9 +414,17 @@ class Querschnitt {
     }
     return out;
   }
+
+  /** Raster mit etwa `ziel` Zellen innerhalb der Fläche (feiner bei dünnwandigen Profilen). */
+  zellenAuto(ziel = 2500) {
+    const s = Math.sqrt(this.A / ziel); // Zellkantenlänge
+    const ny = Math.min(240, Math.max(30, Math.ceil(this.breite / s)));
+    const nz = Math.min(240, Math.max(30, Math.ceil(this.hoehe / s)));
+    return this.zellen(ny, nz);
+  }
 }
 
-/* ======================= Konkrete Querschnitte ======================= */
+/* ======================= Parametrische Querschnitte ======================= */
 
 class Rechteck extends Querschnitt {
   static get titel() { return "Rechteck"; }
@@ -198,6 +435,8 @@ class Rechteck extends Querschnitt {
     ];
   }
   erzeugeTeile() { return [new RechteckTeil(0, 0, this.w.b, this.w.h)]; }
+  klassen() { return Klassifizierung.vollquerschnitt(); }
+  schubflaechen() { return { z: this.A, y: this.A, hinweis: "Rechteck: A<sub>v</sub> vereinfacht = A." }; }
 }
 
 class TQuerschnitt extends Querschnitt {
@@ -220,6 +459,11 @@ class TQuerschnitt extends Querschnitt {
   erzeugeTeile() {
     const { bf, hf, bw, h } = this.w;
     return [new RechteckTeil(0, 0, bf, hf), new RechteckTeil((bf - bw) / 2, hf, bw, h - hf)];
+  }
+  // geschweißter T-Querschnitt: A_v = t_w (h - t_f/2), Querkraft in Flanschrichtung nicht angegeben
+  schubflaechen() {
+    const { hf, bw, h } = this.w;
+    return { z: bw * (h - hf / 2), y: null, hinweis: "T-Querschnitt: A<sub>v,z</sub> = t<sub>w</sub>·(h − t<sub>f</sub>/2) (geschweißt)." };
   }
 }
 
@@ -248,6 +492,16 @@ class DoppelT extends Querschnitt {
       new RechteckTeil(0, h - tf, b, tf),
     ];
   }
+  // geschweißter Doppel-T (ohne Schweißnaht): Flanschüberstand c = (b - t_w)/2, Stegmaß d = h - 2 t_f
+  klassen(fy) {
+    const { b, h, tf, tw } = this.w;
+    return Klassifizierung.iProfil((b - tw) / 2, tf, h - 2 * tf, tw, Klassifizierung.eps(fy));
+  }
+  // geschweißt: A_v,z = η·Σ h_w t_w (η = 1,0 nach NA DE), A_v,y = A − Σ h_w t_w
+  schubflaechen() {
+    const { h, tf, tw } = this.w, hw = h - 2 * tf;
+    return { z: hw * tw, y: this.A - hw * tw, hinweis: "Geschweißter Doppel-T: A<sub>v,z</sub> = h<sub>w</sub>·t<sub>w</sub> (η = 1,0)." };
+  }
 }
 
 class Kasten extends Querschnitt {
@@ -269,12 +523,22 @@ class Kasten extends Querschnitt {
     const { b, h, t } = this.w;
     return [new RechteckTeil(0, 0, b, h), new RechteckTeil(t, t, b - 2 * t, h - 2 * t, -1)];
   }
+  // scharfkantiger (geschweißter) Kasten: lichte Wandbreiten b - 2t bzw. h - 2t
+  klassen(fy) {
+    const { b, h, t } = this.w;
+    return Klassifizierung.hohlkasten(b - 2 * t, h - 2 * t, t, Klassifizierung.eps(fy));
+  }
+  schubflaechen() {
+    const { h, t } = this.w, hw = h - 2 * t;
+    return { z: 2 * hw * t, y: this.A - 2 * hw * t, hinweis: "Geschweißter Kasten: A<sub>v</sub> nach EN 1993-1-1, 6.2.6(3) d), e)." };
+  }
 }
 
 class Kreis extends Querschnitt {
   static get titel() { return "Kreis"; }
   static get felder() { return [{ id: "d", label: "Durchmesser d [mm]", wert: 300 }]; }
   erzeugeTeile() { return [new KreisTeil(this.w.d / 2, this.w.d / 2, this.w.d)]; }
+  klassen() { return Klassifizierung.vollquerschnitt(); }
 }
 
 class Rohr extends Querschnitt {
@@ -294,9 +558,11 @@ class Rohr extends Querschnitt {
     const { d, t } = this.w;
     return [new KreisTeil(d / 2, d / 2, d), new KreisTeil(d / 2, d / 2, d - 2 * t, -1)];
   }
+  klassen(fy) { return Klassifizierung.rohr(this.w.d, this.w.t, Klassifizierung.eps(fy)); }
+  schubflaechen() { return { z: 2 * this.A / Math.PI, y: 2 * this.A / Math.PI, hinweis: "Rohr: A<sub>v</sub> = 2A/π." }; }
 }
 
-/** Register aller Querschnitte (Schlüssel -> Klasse). Neue Querschnitte hier ergänzen. */
+/** Register aller Querschnitte (Schlüssel -> Klasse). Neue Querschnitte hier oder in profile.js ergänzen. */
 const QUERSCHNITTE = {
   rechteck: Rechteck,
   tquerschnitt: TQuerschnitt,

@@ -17,6 +17,7 @@
     <nav>
       <button class="tab aktiv" data-tab="spannung">Spannungen &amp; 3D</button>
       <button class="tab" data-tab="werte">Querschnittswerte</button>
+      <button class="tab" data-tab="tragf">Tragfähigkeit</button>
       <button class="tab" data-tab="stahlbeton">Stahlbeton</button>
     </nav>
   </header>
@@ -76,7 +77,8 @@
         <label>Form <select id="qw-typ"></select></label>
         <div id="qw-felder" class="raster"></div>
         <p class="hinweis">Alle Werte werden automatisch berechnet. Bezugsachsen: Schwerachsen y (horizontal)
-          und z (vertikal). Alle Querschnitte sind symmetrisch, y und z sind damit Hauptachsen.</p>
+          und z (vertikal). Alle Querschnitte besitzen mindestens eine Symmetrieachse, y und z sind damit Hauptachsen.
+          Walzprofile werden aus den Katalogabmessungen (inkl. Ausrundungen) berechnet.</p>
       </div>
       <div class="ansicht">
         <div id="qw-tabelle" class="ergebnis"></div>
@@ -84,7 +86,30 @@
       </div>
     </section>
 
-    <!-- ===== Tab 3: Stahlbeton-Biegebemessung ===== -->
+    <!-- ===== Tab 3: Tragfähigkeit von Stahlquerschnitten ===== -->
+    <section id="tab-tragf" class="tab-inhalt">
+      <div class="eingabe">
+        <h2>Querschnitt</h2>
+        <label>Form <select id="tf-typ"></select></label>
+        <div id="tf-felder" class="raster"></div>
+
+        <h2>Baustahl</h2>
+        <div class="raster">
+          <label>Stahlgüte<select id="tf-guete"></select></label>
+          <label>γ<sub>M0</sub> [–]<input type="number" id="tf-gm0" value="1" step="any"></label>
+        </div>
+        <p class="hinweis">f<sub>y</sub> gilt für Blechdicken t ≤ 40 mm (EN 10025). γ<sub>M0</sub> = 1,0 nach NA (DE).
+          Gerechnet wird mit den Querschnittswerten aus den Katalogabmessungen.</p>
+      </div>
+      <div class="ansicht">
+        <div id="tf-ergebnis" class="ergebnis"></div>
+        <canvas id="tf-skizze" style="height:300px"></canvas>
+        <p class="hinweis">Gestrichelt: elastische Nulllinien (Schwerachsen). Grün: plastische Nulllinien
+          (teilen die Querschnittsfläche in zwei gleich große Hälften).</p>
+      </div>
+    </section>
+
+    <!-- ===== Tab 4: Stahlbeton-Biegebemessung ===== -->
     <section id="tab-stahlbeton" class="tab-inhalt">
       <div class="eingabe">
         <h2>Querschnitt</h2>
@@ -127,7 +152,9 @@
 
   <script src="util.js"></script>
   <script src="querschnitte.js"></script>
+  <script src="profile.js"></script>
   <script src="spannung.js"></script>
+  <script src="tragfaehigkeit.js"></script>
   <script src="ansicht3d.js"></script>
   <script src="stahlbeton.js"></script>
   <script src="app.js"></script>

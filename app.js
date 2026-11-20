@@ -2,10 +2,11 @@
 
 /**
  * app.js - Oberfläche: verbindet Eingabefelder mit den Rechenklassen.
- *  - QuerschnittWahl     : Querschnittsauswahl + Maßfelder (von zwei Tabs genutzt)
+ *  - QuerschnittWahl     : Querschnittsauswahl + Maßfelder (von drei Tabs genutzt)
  *  - SpannungsTab        : Tab "Spannungen & 3D"
- *  - QSkizze             : Skizze des Querschnitts mit Schwerachsen
+ *  - QSkizze             : Skizze des Querschnitts mit Schwerachsen und plastischen Nulllinien
  *  - QuerschnittswerteTab: Tab "Querschnittswerte"
+ *  - TragfaehigkeitTab   : Tab "Tragfähigkeit" (Stahlquerschnitte)
  *  - SBSkizze            : Skizze Querschnitt + Dehnungsebene (Stahlbeton)
  *  - StahlbetonTab       : Tab "Stahlbeton"
  *  - App                 : Tab-Umschaltung, Start
@@ -13,6 +14,8 @@
 
 /** Tabellenzeile: Bezeichnung | Wert | Einheit */
 const zeile = (l, w, e = "") => `<tr><td>${l}</td><td>${w}</td><td>${e}</td></tr>`;
+/** Tabellenzeile mit beliebig vielen Zellen */
+const zeileN = (...zellen) => "<tr>" + zellen.map(z => `<td>${z}</td>`).join("") + "</tr>";
 
 /** Skaliert ein Canvas auf Bildschirmauflösung, leert es und liefert {g, w, h}. */
 function canvasVorbereiten(cv) {
@@ -34,28 +37,51 @@ class QuerschnittWahl {
    * @param {string} selectId  ID des <select>
    * @param {string} felderId  ID des Containers für die Maßfelder
    * @param {Function} beiAenderung Rückruf bei jeder Änderung
+   * @param {string} start Schlüssel des vorgewählten Querschnitts (optional)
    */
-  constructor(selectId, felderId, beiAenderung) {
+  constructor(selectId, felderId, beiAenderung, start = null) {
     this.sel = document.getElementById(selectId);
     this.box = document.getElementById(felderId);
     this.cb = beiAenderung;
-    for (const [key, K] of Object.entries(QUERSCHNITTE)) this.sel.add(new Option(K.titel, key));
+
+    // Auswahlliste nach Gruppen (parametrisch / Walzprofile) aufbauen
+    const gruppen = {};
+    for (const [key, K] of Object.entries(QUERSCHNITTE)) {
+      if (!gruppen[K.gruppe]) {
+        gruppen[K.gruppe] = document.createElement("optgroup");
+        gruppen[K.gruppe].label = K.gruppe;
+        this.sel.appendChild(gruppen[K.gruppe]);
+      }
+      gruppen[K.gruppe].appendChild(new Option(K.titel, key));
+    }
+    if (start && QUERSCHNITTE[start]) this.sel.value = start;
+
     this.sel.addEventListener("change", () => { this.baueFelder(); this.cb(); });
     this.baueFelder();
   }
 
   get klasse() { return QUERSCHNITTE[this.sel.value]; }
 
-  /** Eingabefelder des gewählten Querschnitts erzeugen. */
+  /** Eingabefelder des gewählten Querschnitts erzeugen (Zahlenfeld oder Auswahlliste). */
   baueFelder() {
     this.box.innerHTML = "";
     for (const f of this.klasse.felder) {
       const label = document.createElement("label");
       label.textContent = f.label;
-      const inp = document.createElement("input");
-      inp.type = "number"; inp.step = "any"; inp.id = `${this.box.id}-${f.id}`; inp.value = f.wert;
-      inp.addEventListener("input", () => this.cb());
-      label.appendChild(inp);
+      let el;
+      if (f.optionen) {
+        el = document.createElement("select");
+        f.optionen.forEach(o => el.add(new Option(o, o)));
+        el.value = f.wert;
+        el.addEventListener("change", () => this.cb());
+        label.style.gridColumn = "1 / -1"; // Profilauswahl über die volle Breite
+      } else {
+        el = document.createElement("input");
+        el.type = "number"; el.step = "any"; el.value = f.wert;
+        el.addEventListener("input", () => this.cb());
+      }
+      el.id = `${this.box.id}-${f.id}`;
+      label.appendChild(el);
       this.box.appendChild(label);
     }
   }
@@ -63,7 +89,10 @@ class QuerschnittWahl {
   /** Querschnitt aus den Feldern erzeugen (wirft Error bei ungültigen Maßen). */
   erzeuge() {
     const K = this.klasse, werte = {};
-    for (const f of K.felder) werte[f.id] = zahl(`${this.box.id}-${f.id}`);
+    for (const f of K.felder) {
+      const id = `${this.box.id}-${f.id}`;
+      werte[f.id] = f.optionen ? document.getElementById(id).value : zahl(id);
+    }
     return new K(werte);
   }
 }
@@ -136,13 +165,17 @@ class SpannungsTab {
   }
 }
 
-/* ======================= Tab 2: Querschnittswerte ======================= */
+/* ======================= Querschnittsskizze ======================= */
 
-/** Zeichnet den Querschnitt mit Schwerachsen und Hauptmaßen. */
+/** Zeichnet den Querschnitt mit Schwerachsen, Hauptmaßen und (optional) plastischen Nulllinien. */
 class QSkizze {
   constructor(canvas) { this.cv = canvas; }
 
-  zeichne(q) {
+  /**
+   * @param {Querschnitt} q
+   * @param {Object} opt {pna: {y, z}} = Lage der plastischen Nulllinien relativ zum Schwerpunkt [mm]
+   */
+  zeichne(q, opt = {}) {
     const { g, w, h } = canvasVorbereiten(this.cv);
     if (w === 0 || h === 0) return;
     const m = 36;
@@ -153,9 +186,9 @@ class QSkizze {
 
     // Fläche aus Zellen
     g.fillStyle = "#b9c2cf";
-    for (const c of q.zellen(90, 90)) g.fillRect(X(c.y - c.dy / 2), Y(c.z - c.dz / 2), c.dy * sk + 0.6, c.dz * sk + 0.6);
+    for (const c of q.zellenAuto(5000)) g.fillRect(X(c.y - c.dy / 2), Y(c.z - c.dz / 2), c.dy * sk + 0.6, c.dz * sk + 0.6);
 
-    // Schwerachsen
+    // Schwerachsen (elastische Nulllinien)
     g.save(); g.setLineDash([8, 4]); g.lineWidth = 1.5;
     g.strokeStyle = "#c0392b"; g.beginPath(); g.moveTo(X(q.ymin) - 14, Y(0)); g.lineTo(X(q.ymax) + 14, Y(0)); g.stroke();
     g.strokeStyle = "#2874a6"; g.beginPath(); g.moveTo(X(0), Y(q.zmin) - 14); g.lineTo(X(0), Y(q.zmax) + 14); g.stroke();
@@ -163,6 +196,14 @@ class QSkizze {
     g.font = "12px system-ui, sans-serif";
     g.fillStyle = "#c0392b"; g.fillText("y", X(q.ymax) + 16, Y(0) + 4);
     g.fillStyle = "#2874a6"; g.fillText("z", X(0) + 5, Y(q.zmax) + 26);
+
+    // Plastische Nulllinien (grün, durchgezogen)
+    if (opt.pna) {
+      g.save(); g.strokeStyle = "#1b7f3b"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(X(q.ymin) - 14, Y(opt.pna.z)); g.lineTo(X(q.ymax) + 14, Y(opt.pna.z)); g.stroke();
+      g.beginPath(); g.moveTo(X(opt.pna.y), Y(q.zmin) - 14); g.lineTo(X(opt.pna.y), Y(q.zmax) + 14); g.stroke();
+      g.restore();
+    }
 
     // Hauptmaße
     g.fillStyle = "#333"; g.textAlign = "center";
@@ -173,10 +214,12 @@ class QSkizze {
   }
 }
 
+/* ======================= Tab 2: Querschnittswerte ======================= */
+
 class QuerschnittswerteTab {
   constructor() {
     this.skizze = new QSkizze(document.getElementById("qw-skizze"));
-    this.wahl = new QuerschnittWahl("qw-typ", "qw-felder", () => this.aktualisiere());
+    this.wahl = new QuerschnittWahl("qw-typ", "qw-felder", () => this.aktualisiere(), "ipe");
     this.aktualisiere();
   }
 
@@ -190,20 +233,105 @@ class QuerschnittswerteTab {
     h += zeile("Breite b", fmt(q.breite, 1), "mm");
     h += zeile("Höhe h", fmt(q.hoehe, 1), "mm");
     h += zeile("<b>Fläche A</b>", `<b>${fmt(q.A / 100, 2)}</b>`, "cm²");
+    h += zeile("Masse (Stahl, 7850 kg/m³)", fmt(q.masse, 1), "kg/m");
     h += zeile("Schwerpunkt z<sub>s</sub> von Oberkante", fmt(Math.abs(q.zmin), 1), "mm");
     h += zeile("Schwerpunkt z<sub>s</sub> von Unterkante", fmt(q.zmax, 1), "mm");
+    h += zeile("Schwerpunkt y<sub>s</sub> von linker Kante", fmt(Math.abs(q.ymin), 1), "mm");
     h += zeile("<b>Trägheitsmoment I<sub>y</sub></b>", `<b>${fmt(q.Iy / 1e4, 1)}</b>`, "cm⁴");
     h += zeile("<b>Trägheitsmoment I<sub>z</sub></b>", `<b>${fmt(q.Iz / 1e4, 1)}</b>`, "cm⁴");
     h += zeile("Polares Moment I<sub>p</sub> = I<sub>y</sub> + I<sub>z</sub>", fmt(q.Ip / 1e4, 1), "cm⁴");
     h += zeile("<b>Widerstandsmoment W<sub>y,o</sub></b> (oben)", `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
     h += zeile("<b>Widerstandsmoment W<sub>y,u</sub></b> (unten)", `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
     h += zeile("<b>Widerstandsmoment W<sub>z</sub></b>", `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
+    h += zeile("<b>Plastisches Moment W<sub>pl,y</sub></b>", `<b>${fmt(q.Wply / 1e3, 2)}</b>`, "cm³");
+    h += zeile("<b>Plastisches Moment W<sub>pl,z</sub></b>", `<b>${fmt(q.Wplz / 1e3, 2)}</b>`, "cm³");
     h += zeile("Trägheitsradius i<sub>y</sub>", fmt(q.iy / 10, 2), "cm");
     h += zeile("Trägheitsradius i<sub>z</sub>", fmt(q.iz / 10, 2), "cm");
     h += zeile("Statisches Moment S<sub>y</sub> (über Schwerachse)", fmt(q.Sy / 1e3, 2), "cm³");
     h += "</table>";
     box.innerHTML = h;
     this.skizze.zeichne(q);
+  }
+}
+
+/* ======================= Tab 3: Tragfähigkeit (Stahl) ======================= */
+
+class TragfaehigkeitTab {
+  constructor() {
+    this.skizze = new QSkizze(document.getElementById("tf-skizze"));
+    this.wahl = new QuerschnittWahl("tf-typ", "tf-felder", () => this.aktualisiere(), "ipe");
+
+    const sel = document.getElementById("tf-guete");
+    STAHLGUETEN.forEach(([name]) => sel.add(new Option(name, name)));
+    sel.value = "S355";
+    sel.addEventListener("change", () => this.aktualisiere());
+    document.getElementById("tf-gm0").addEventListener("input", () => this.aktualisiere());
+    this.aktualisiere();
+  }
+
+  aktualisiere() {
+    const box = document.getElementById("tf-ergebnis");
+    let q;
+    try { q = this.wahl.erzeuge(); }
+    catch (e) { box.innerHTML = `<span class="fehler">${e.message}</span>`; return; }
+
+    const name = document.getElementById("tf-guete").value;
+    const fy = STAHLGUETEN.find(s => s[0] === name)[1];
+    const gm0 = zahl("tf-gm0") > 0 ? zahl("tf-gm0") : 1;
+    const r = new Stahlbemessung(q, fy, gm0).berechne();
+
+    box.innerHTML = this.tabellen(q, r);
+    this.skizze.zeichne(q, { pna: { y: r.z.lage, z: r.y.lage } });
+  }
+
+  /** Ergebnisse als HTML-Tabellen. */
+  tabellen(q, r) {
+    const kl = k => (k === null ? "–" : k);
+    const zahlOderStrich = (v, d) => (v === null ? "–" : fmt(v, d));
+
+    let h = "<table>";
+    h += zeile("Streckgrenze f<sub>y</sub>", fmt(r.fy, 0), "N/mm²");
+    h += zeile("ε = √(235/f<sub>y</sub>)", fmt(r.eps, 3), "–");
+    h += zeile("Fläche A", fmt(q.A / 100, 2), "cm²");
+    h += zeile("Masse (Stahl)", fmt(q.masse, 1), "kg/m");
+    h += "</table>";
+
+    h += "<p><b>Biegung</b></p><table><tr><th></th><th>y–y</th><th>z–z</th><th></th></tr>";
+    h += zeileN("W<sub>el</sub>", fmt(r.y.Wel / 1e3, 1), fmt(r.z.Wel / 1e3, 1), "cm³");
+    h += zeileN("W<sub>pl</sub>", fmt(r.y.Wpl / 1e3, 1), fmt(r.z.Wpl / 1e3, 1), "cm³");
+    h += zeileN("α<sub>pl</sub> = W<sub>pl</sub>/W<sub>el</sub>", fmt(r.y.alpha, 3), fmt(r.z.alpha, 3), "–");
+    h += zeileN("Lage pl. Nulllinie*", fmt(r.y.lage, 1), fmt(r.z.lage, 1), "mm");
+    h += zeileN("Querschnittsklasse", kl(r.y.klasse), kl(r.z.klasse), "");
+    h += zeileN("M<sub>el,Rd</sub> = W<sub>el</sub>·f<sub>y</sub>/γ<sub>M0</sub>", fmt(r.y.Mel, 1), fmt(r.z.Mel, 1), "kNm");
+    h += zeileN("M<sub>pl,Rd</sub> = W<sub>pl</sub>·f<sub>y</sub>/γ<sub>M0</sub>", fmt(r.y.Mpl, 1), fmt(r.z.Mpl, 1), "kNm");
+    h += zeileN("<b>M<sub>c,Rd</sub></b> (nach Klasse)", `<b>${zahlOderStrich(r.y.Mc, 1)}</b>`, `<b>${zahlOderStrich(r.z.Mc, 1)}</b>`, "kNm");
+    h += "</table><p class=\"hinweis\">* Abstand der plastischen Nulllinie vom Schwerpunkt (z nach unten, y nach rechts).</p>";
+
+    h += "<p><b>Normalkraft und Querkraft</b></p><table><tr><th></th><th>V<sub>z</sub> / Druck</th><th>V<sub>y</sub></th><th></th></tr>";
+    h += zeileN("Klasse (Druck)", kl(r.klasseDruck), "", "");
+    h += zeileN("N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub>", fmt(r.Npl, 1), "", "kN");
+    h += zeileN("A<sub>v</sub>", r.Av && r.Av.z ? fmt(r.Av.z / 100, 2) : "–", r.Av && r.Av.y ? fmt(r.Av.y / 100, 2) : "–", "cm²");
+    h += zeileN("<b>V<sub>pl,Rd</sub></b> = A<sub>v</sub>·f<sub>y</sub>/(√3·γ<sub>M0</sub>)", `<b>${zahlOderStrich(r.Vz, 1)}</b>`, `<b>${zahlOderStrich(r.Vy, 1)}</b>`, "kN");
+    h += "</table>";
+
+    // Klassifizierung im Detail
+    if (r.klassen) {
+      h += "<p><b>Querschnittsklassen</b> (EN 1993-1-1, Tab. 5.2)</p><ul>";
+      for (const [name, k] of [["Biegung y–y", r.klassen.biegungY], ["Biegung z–z", r.klassen.biegungZ], ["Druck", r.klassen.druck]]) {
+        const teile = k.teile.map(t => `${t.name} c/t = ${fmt(t.ct, 1)} (Kl. ${t.klasse})`).join(", ");
+        h += `<li>${name}: <b>Klasse ${k.klasse}</b>${teile ? " – " + teile : ""}${k.hinweis ? " – " + k.hinweis : ""}</li>`;
+      }
+      h += "</ul>";
+    }
+
+    // Hinweise
+    const hinweise = [];
+    if (!r.klassen) hinweise.push("Querschnittsklasse für diese Form nicht ermittelt: M<sub>c,Rd</sub> nicht angegeben, M<sub>pl,Rd</sub> gilt nur bei Klasse 1 und 2.");
+    if ([r.y.klasse, r.z.klasse, r.klasseDruck].includes(4)) hinweise.push("Klasse 4: Beulen (wirksamer Querschnitt) wird nicht berechnet, deshalb ist dafür kein M<sub>c,Rd</sub> angegeben und N<sub>pl,Rd</sub> nicht anwendbar.");
+    if (r.Av && r.Av.hinweis) hinweise.push(r.Av.hinweis);
+    hinweise.push("Biegung, Normalkraft und Querkraft einzeln betrachtet; Abminderungen durch N und V (EN 1993-1-1, 6.2.8 bis 6.2.10) sind nicht berücksichtigt.");
+    h += "<ul>" + hinweise.map(t => `<li>${t}</li>`).join("") + "</ul>";
+    return h;
   }
 }
 
@@ -304,7 +432,7 @@ class SBSkizze {
   }
 }
 
-/* ======================= Tab 3: Stahlbeton ======================= */
+/* ======================= Tab 4: Stahlbeton ======================= */
 
 class StahlbetonTab {
   constructor() {
@@ -384,6 +512,7 @@ class App {
   constructor() {
     this.spannung = new SpannungsTab();
     this.werte = new QuerschnittswerteTab();
+    this.tragf = new TragfaehigkeitTab();
     this.stahlbeton = new StahlbetonTab();
     document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => this.wechsle(btn.dataset.tab)));
   }
@@ -394,6 +523,7 @@ class App {
     document.querySelectorAll(".tab-inhalt").forEach(s => s.classList.toggle("aktiv", s.id === "tab-" + name));
     if (name === "spannung") this.spannung.ansicht.zeichne();
     else if (name === "werte") this.werte.aktualisiere();
+    else if (name === "tragf") this.tragf.aktualisiere();
     else this.stahlbeton.aktualisiere();
   }
 }

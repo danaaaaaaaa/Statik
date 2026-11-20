@@ -45,7 +45,7 @@ class Ansicht3D {
   /** Zellen, Extremwerte und Skalierung vorberechnen. */
   _vorbereiten() {
     const { q, sp } = this;
-    this.zellen = q.zellen(60, 60).map(c => ({ ...c, s: sp.sigma(c.y, c.z) }));
+    this.zellen = q.zellenAuto(2500).map(c => ({ ...c, s: sp.sigma(c.y, c.z) }));
     this.ext = sp.extremwerte();
     this.maxAbs = Math.max(Math.abs(this.ext.min.wert), Math.abs(this.ext.max.wert));
     this.ym = (q.ymin + q.ymax) / 2;
