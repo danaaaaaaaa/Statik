@@ -14,30 +14,23 @@
 <body>
   <header>
     <h1><a href="#start" id="home" title="Zur Startseite">Statik-Rechner</a></h1>
-    <!-- data-bereich: in welchen Bereichen der Tab erscheint (Steuerung in app.js, Klasse App) -->
-    <nav id="nav" hidden>
-      <button class="tab" data-tab="werte" data-bereich="stahlbau massivbau">Querschnittswerte</button>
-      <button class="tab" data-tab="spannung" data-bereich="stahlbau massivbau">Spannungen &amp; 3D</button>
-      <button class="tab" data-tab="tragf" data-bereich="stahlbau">Tragfähigkeit</button>
-      <button class="tab" data-tab="stahlbeton" data-bereich="massivbau">Biegebemessung</button>
-    </nav>
+    <span id="bereich-titel"></span>
   </header>
 
   <main>
     <!-- ===== Startseite ===== -->
-    <section id="tab-start" class="tab-inhalt start aktiv">
+    <section id="tab-start" class="seite start aktiv">
       <h2>Bereich wählen</h2>
       <div class="karten">
         <a class="karte" href="#stahlbau">
           <h3>Stahlbau</h3>
-          <p>Walzprofile und Standardquerschnitte, Querschnittswerte, Querschnittsklassen,
-            elastische und plastische Tragfähigkeit, Spannungen mit 3D-Ansicht.</p>
+          <p>Querschnitt einmal wählen (Walzprofil, Standardform oder beliebiges Polygon) und auf einer Seite sehen:
+            Querschnittswerte, Querschnittsklassen, Tragfähigkeit und Spannungen mit 3D-Ansicht im Vergleich zur Streckgrenze.</p>
           <span class="los">Öffnen →</span>
         </a>
         <a class="karte" href="#massivbau">
           <h3>Massivbau</h3>
-          <p>Biegebemessung nach EC 2 mit NA (DE) für Rechteck und Plattenbalken inklusive
-            Dehnungsebene; Querschnittswerte und Spannungen.</p>
+          <p>Biegebemessung nach EC 2 mit NA (DE) für Rechteck und Plattenbalken, mit Dehnungsebene und Spannungsverlauf.</p>
           <span class="los">Öffnen →</span>
         </a>
       </div>
@@ -45,19 +38,25 @@
         Die Ergebnisse ersetzen keine geprüfte statische Berechnung.</p>
     </section>
 
-    <!-- ===== Tab 1: Elastische Spannungsberechnung ===== -->
-    <section id="tab-spannung" class="tab-inhalt">
+    <!-- ===== Stahlbau: alles auf einer Seite ===== -->
+    <section id="tab-stahlbau" class="seite">
       <div class="eingabe">
         <h2>Querschnitt</h2>
-        <label>Form <select id="qs-typ"></select></label>
-        <div id="qs-felder" class="raster"></div>
-        <div id="qs-kennwerte" class="kennwerte"></div>
+        <label><span>Form</span><select id="st-typ"></select></label>
+        <div id="st-felder" class="raster"></div>
+
+        <h2>Baustahl</h2>
+        <div class="raster">
+          <label><span>Stahlgüte f<sub>y</sub> <button type="button" class="info" data-info="fy">i</button></span><select id="st-guete"></select></label>
+          <label><span>γ<sub>M0</sub> [–] <button type="button" class="info" data-info="gammaM0">i</button></span><input type="number" id="st-gm0" value="1" step="any"></label>
+        </div>
+        <p class="hinweis">f<sub>y</sub> gilt für Blechdicken t ≤ 40 mm (EN 10025). γ<sub>M0</sub> = 1,0 nach NA (DE).</p>
 
         <h2>Schnittgrößen <button type="button" class="info" data-info="sigma">i</button></h2>
         <div class="raster">
-          <label>N [kN] (Zug +)<input type="number" id="in-N" value="0" step="any"></label>
-          <label>M<sub>y</sub> [kNm]<input type="number" id="in-My" value="50" step="any"></label>
-          <label>M<sub>z</sub> [kNm]<input type="number" id="in-Mz" value="10" step="any"></label>
+          <label><span>N [kN] (Zug +)</span><input type="number" id="in-N" value="0" step="any"></label>
+          <label><span>M<sub>y</sub> [kNm]</span><input type="number" id="in-My" value="50" step="any"></label>
+          <label><span>M<sub>z</sub> [kNm]</span><input type="number" id="in-Mz" value="10" step="any"></label>
         </div>
         <p class="hinweis">Koordinaten im Schwerpunkt, y nach rechts, z nach unten.
           M<sub>y</sub> &gt; 0: Zug unten (z &gt; 0). M<sub>z</sub> &gt; 0: Zug rechts (y &gt; 0).
@@ -65,8 +64,8 @@
 
         <h2>Punkte</h2>
         <div class="raster">
-          <label>y [mm]<input type="number" id="pt-y" value="0" step="any"></label>
-          <label>z [mm]<input type="number" id="pt-z" value="0" step="any"></label>
+          <label><span>y [mm]</span><input type="number" id="pt-y" value="0" step="any"></label>
+          <label><span>z [mm]</span><input type="number" id="pt-z" value="0" step="any"></label>
         </div>
         <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
         <table id="pt-tabelle">
@@ -76,7 +75,9 @@
         <p class="hinweis" id="pt-hinweis"></p>
       </div>
 
-      <div class="ansicht">
+      <div class="ergebnisse">
+        <h2>Spannungen im Vergleich zur Streckgrenze</h2>
+        <div id="sp-nachweis" class="kennwerte"></div>
         <div class="knoepfe">
           <button class="knopf" data-ansicht="-35,25">3D</button>
           <button class="knopf" data-ansicht="0,0">Vorne</button>
@@ -86,56 +87,32 @@
           <button class="knopf" id="zoom-minus">−</button>
         </div>
         <canvas id="canvas3d"></canvas>
-        <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Grau: Querschnitt,
-          farbig: Spannungsfläche, grün gestrichelt: Nulllinie. „Seite“ zeigt den Verlauf über die Höhe.</p>
-        <div id="sp-extrem" class="kennwerte"></div>
-      </div>
-    </section>
+        <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Grau: Querschnitt, farbig: Spannungsfläche
+          (volle Farbe = f<sub>yd</sub>), orange gestrichelt: ±f<sub>yd</sub>, grün gestrichelt: Nulllinie.</p>
 
-    <!-- ===== Tab 2: Querschnittswerte ===== -->
-    <section id="tab-werte" class="tab-inhalt">
-      <div class="eingabe">
-        <h2>Querschnitt</h2>
-        <label>Form <select id="qw-typ"></select></label>
-        <div id="qw-felder" class="raster"></div>
-        <p class="hinweis">Alle Werte werden automatisch berechnet. Bezugsachsen: Schwerachsen y (horizontal)
-          und z (vertikal). Alle Querschnitte besitzen mindestens eine Symmetrieachse, y und z sind damit Hauptachsen.
-          Walzprofile werden aus den Katalogabmessungen (inkl. Ausrundungen) berechnet.</p>
-      </div>
-      <div class="ansicht">
-        <div id="qw-tabelle" class="ergebnis"></div>
-        <canvas id="qw-skizze" style="height:300px"></canvas>
-      </div>
-    </section>
-
-    <!-- ===== Tab 3: Tragfähigkeit von Stahlquerschnitten ===== -->
-    <section id="tab-tragf" class="tab-inhalt">
-      <div class="eingabe">
-        <h2>Querschnitt</h2>
-        <label>Form <select id="tf-typ"></select></label>
-        <div id="tf-felder" class="raster"></div>
-
-        <h2>Baustahl</h2>
-        <div class="raster">
-          <label><span>Stahlgüte f<sub>y</sub> <button type="button" class="info" data-info="fy">i</button></span><select id="tf-guete"></select></label>
-          <label><span>γ<sub>M0</sub> [–] <button type="button" class="info" data-info="gammaM0">i</button></span><input type="number" id="tf-gm0" value="1" step="any"></label>
+        <div class="zweispaltig">
+          <div>
+            <h2>Querschnittswerte</h2>
+            <div id="qw-tabelle" class="ergebnis"></div>
+          </div>
+          <div>
+            <h2>Tragfähigkeit</h2>
+            <div id="tf-ergebnis" class="ergebnis"></div>
+          </div>
         </div>
-        <p class="hinweis">f<sub>y</sub> gilt für Blechdicken t ≤ 40 mm (EN 10025). γ<sub>M0</sub> = 1,0 nach NA (DE).
-          Gerechnet wird mit den Querschnittswerten aus den Katalogabmessungen.</p>
-      </div>
-      <div class="ansicht">
-        <div id="tf-ergebnis" class="ergebnis"></div>
-        <canvas id="tf-skizze" style="height:300px"></canvas>
-        <p class="hinweis">Gestrichelt: elastische Nulllinien (Schwerachsen). Grün: plastische Nulllinien
-          (teilen die Querschnittsfläche in zwei gleich große Hälften).</p>
+
+        <h2>Querschnittsskizze</h2>
+        <canvas id="st-skizze" style="height:320px"></canvas>
+        <p class="hinweis">Gestrichelt: Schwerachsen (rot y, blau z). Grün: plastische Nulllinien (teilen die Fläche in zwei gleich große Hälften).
+          Violett punktiert: Hauptachsen (nur bei unsymmetrischen Querschnitten).</p>
       </div>
     </section>
 
-    <!-- ===== Tab 4: Stahlbeton-Biegebemessung ===== -->
-    <section id="tab-stahlbeton" class="tab-inhalt">
+    <!-- ===== Massivbau: Stahlbeton-Biegebemessung ===== -->
+    <section id="tab-stahlbeton" class="seite">
       <div class="eingabe">
         <h2>Querschnitt</h2>
-        <label>Form
+        <label><span>Form</span>
           <select id="sb-typ">
             <option value="rechteck">Rechteck</option>
             <option value="plattenbalken">Plattenbalken</option>
@@ -143,13 +120,14 @@
         </label>
         <div class="raster">
           <label><span id="sb-lbl-b">Breite b [cm]</span><input type="number" id="sb-b" value="30" step="any"></label>
-          <label>Höhe h [cm]<input type="number" id="sb-h" value="60" step="any"></label>
-          <label class="nur-pb versteckt"><span>Gurtbreite b<sub>eff</sub> [cm] <button type="button" class="info" data-info="beff">i</button></span><input type="number" id="sb-bf" value="120" step="any"></label>
-          <label class="nur-pb versteckt">Gurtdicke h<sub>f</sub> [cm]<input type="number" id="sb-hf" value="20" step="any"></label>
-          <label><span>d<sub>1</sub> Zugbewehrung [cm] <button type="button" class="info" data-info="d1d2">i</button></span><input type="number" id="sb-d1" value="5" step="any"></label>
-          <label>d<sub>2</sub> Druckbewehrung [cm]<input type="number" id="sb-d2" value="5" step="any"></label>
+          <label><span>Höhe h [cm]</span><input type="number" id="sb-h" value="60" step="any"></label>
+          <label class="nur-pb versteckt"><span>b<sub>eff</sub> [cm] <button type="button" class="info" data-info="beff">i</button></span><input type="number" id="sb-bf" value="120" step="any"></label>
+          <label class="nur-pb versteckt"><span>h<sub>f</sub> [cm]</span><input type="number" id="sb-hf" value="20" step="any"></label>
+          <label><span>d<sub>1</sub> Zug [cm] <button type="button" class="info" data-info="d1d2">i</button></span><input type="number" id="sb-d1" value="5" step="any"></label>
+          <label><span>d<sub>2</sub> Druck [cm]</span><input type="number" id="sb-d2" value="5" step="any"></label>
         </div>
-        <p class="hinweis">d<sub>1</sub>/d<sub>2</sub> = Abstand Bewehrungsschwerpunkt zum jeweiligen Rand.
+        <p class="hinweis">b<sub>eff</sub> = Gurtbreite, h<sub>f</sub> = Gurtdicke, d<sub>1</sub>/d<sub>2</sub> = Abstand des
+          Schwerpunkts der Zug-/Druckbewehrung zum jeweiligen Rand.
           Platte: b = 100 cm setzen, A<sub>s</sub> gilt dann je Meter.</p>
 
         <h2>Baustoffe</h2>
@@ -162,12 +140,12 @@
         <label><span>M<sub>Ed</sub> [kNm] (negativ = Zug oben) <button type="button" class="info" data-info="MEd">i</button></span><input type="number" id="sb-M" value="250" step="any"></label>
       </div>
 
-      <div class="ansicht">
-        <div id="sb-ergebnis" class="ergebnis"></div>
-        <canvas id="sb-skizze" style="height:380px"></canvas>
+      <div class="ergebnisse">
+        <canvas id="sb-skizze" style="height:260px"></canvas>
         <p class="hinweis">Links: Querschnitt mit Druckzone (blau, Spannungsblock λ·x), Dehnungsnulllinie x
           (gestrichelt), Zugbewehrung (rot) und Druckbewehrung (dunkelblau).
-          Rechts: Dehnungsebene, Druck links, Zug rechts.</p>
+          Mitte: Dehnungsebene, rechts: Spannungsverlauf (Druck links, Zug rechts).</p>
+        <div id="sb-ergebnis" class="ergebnis"></div>
       </div>
     </section>
   </main>

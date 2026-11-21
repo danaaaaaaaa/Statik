@@ -168,6 +168,12 @@ class Biegebemessung {
         bereich: bereich2 ? 2 : 3, kappa, ebenen, epsYd, epsUd: EPS_UD,
         epsS1: eps(d), fliesst: eps(d) >= epsYd - 1e-9,
       };
+      // Spannungen der Bewehrung aus den Dehnungen (bilineare Linie mit horizontalem Ast)
+      res.spannung = {
+        sigC: bt.eta * bt.fcd,                                          // Betondruckspannung im Spannungsblock
+        sigS1: Math.min(eps(d) / 1000 * st.Es, st.fyd),                 // Zugbewehrung
+        sigS2: As2 > 0 ? res.sigS2 : 0,                                     // Druckbewehrung
+      };
       if (bereich2) res.hinweise.push("Bereich 2: Stahldehnung auf 25 ‰ begrenzt, der Beton ist nicht voll ausgenutzt (Spannungsblock bleibt als Näherung).");
     }
     res.druckzone = !istT ? "Rechteck-Druckzone"

@@ -9,13 +9,11 @@ body {
 
 header { background: var(--blau); color: #fff; padding: .6rem 1rem; padding-top: calc(.6rem + env(safe-area-inset-top)); display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
 header h1 { font-size: 1.15rem; margin: 0; }
-nav { display: flex; overflow-x: auto; max-width: 100%; }
-.tab { background: transparent; color: #fff; border: 0; border-bottom: 3px solid transparent; padding: .5rem .8rem; cursor: pointer; font-size: .95rem; white-space: nowrap; }
-.tab.aktiv { border-bottom-color: #fff; font-weight: 600; }
+#bereich-titel { font-size: 1rem; opacity: .85; }
 
-.tab-inhalt { display: none; padding: 1rem; gap: 1.25rem; grid-template-columns: minmax(300px, 380px) 1fr; align-items: start; }
-.tab-inhalt.aktiv { display: grid; }
-.tab-inhalt > * { min-width: 0; }
+.seite { display: none; padding: 1rem; gap: 1.25rem; grid-template-columns: minmax(300px, 380px) 1fr; align-items: start; }
+.seite.aktiv { display: grid; }
+.seite > * { min-width: 0; }
 
 h2 { font-size: 1rem; margin: 1.1rem 0 .5rem; border-bottom: 1px solid var(--rand); padding-bottom: .2rem; }
 h2:first-child { margin-top: 0; }
@@ -44,21 +42,19 @@ td button { border: 0; background: none; cursor: pointer; color: #b00020; font-s
 .ergebnis ul { margin: .4rem 0 0; padding-left: 1.2rem; }
 
 /* Tablet / Handy: einspaltig */
-@media (max-width: 820px) { .tab-inhalt.aktiv { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .seite.aktiv { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {
   header { gap: .4rem; }
-  .tab-inhalt { padding: .7rem; }
+  .seite { padding: .7rem; }
   canvas { height: 360px; }
   .ergebnis, .kennwerte { font-size: .82rem; }
 }
 
 /* ---------- Kopfzeile: Link zur Startseite ---------- */
 header h1 a { color: #fff; text-decoration: none; }
-nav[hidden] { display: none; }
-.tab[hidden] { display: none; }
 
 /* ---------- Startseite ---------- */
-.tab-inhalt.start.aktiv { display: block; max-width: 900px; margin: 0 auto; }
+.seite.start.aktiv { display: block; max-width: 900px; margin: 0 auto; }
 .karten { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: .8rem 0; }
 .karte { display: block; padding: 1.1rem 1.2rem; border: 1px solid var(--rand); border-radius: 10px; background: var(--grau);
   color: #222; text-decoration: none; border-left: 6px solid var(--blau); }
@@ -92,3 +88,21 @@ label > span { display: block; }
 .infohinweis { font-size: .72rem; color: #777; margin: .7rem 0 0; }
 
 @media (max-width: 600px) { .karten { grid-template-columns: 1fr; } }
+
+/* ---------- Zeilenumbrüche vermeiden ---------- */
+/* Zahlen mit Einheit und Überschriften der Tabellen nicht trennen; Beschriftung bricht nur zwischen Wörtern */
+td { white-space: nowrap; }
+.nb { white-space: nowrap; }
+label > span { overflow-wrap: normal; }
+.raster > label { min-width: 0; }
+
+/* ---------- Seitenaufbau Stahlbau ---------- */
+.zweispaltig { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.ergebnisse > h2:first-child { margin-top: 0; }
+@media (max-width: 1100px) { .zweispaltig { grid-template-columns: minmax(0, 1fr); } }
+.ergebnis { overflow-x: auto; }
+
+textarea { width: 100%; padding: .4rem .5rem; border: 1px solid #aab; border-radius: 6px; font: 16px ui-monospace, Menlo, Consolas, monospace; resize: vertical; background: #fff; }
+.balken { height: .7rem; background: #e3e7ec; border-radius: 4px; overflow: hidden; margin: .25rem 0 .1rem; }
+.balken > i { display: block; height: 100%; background: #2e8b57; }
+.balken > i.zu-viel { background: #c0392b; }

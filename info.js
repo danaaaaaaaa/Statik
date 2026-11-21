@@ -144,12 +144,74 @@ const INFO = {
     normen: [`${EC3}, 6.2.6(4), Gl. (6.20) (elastische Schubspannung)`],
   },
 
+  polygon: {
+    titel: "Beliebiges Polygon: Eingabe und Berechnung",
+    formeln: [
+      "Umfahrungsmethode (Gaußscher Integralsatz), Kante i von P<sub>i</sub>(y<sub>i</sub>|z<sub>i</sub>) nach P<sub>i+1</sub>:",
+      "c<sub>i</sub> = y<sub>i</sub>·z<sub>i+1</sub> − y<sub>i+1</sub>·z<sub>i</sub>",
+      "A = ½·Σ c<sub>i</sub>",
+      "S<sub>y</sub> = ∫z dA = ⅙·Σ (z<sub>i</sub> + z<sub>i+1</sub>)·c<sub>i</sub> &nbsp;&nbsp; S<sub>z</sub> = ∫y dA = ⅙·Σ (y<sub>i</sub> + y<sub>i+1</sub>)·c<sub>i</sub>",
+      "I<sub>y</sub> = ∫z² dA = 1/12·Σ (z<sub>i</sub>² + z<sub>i</sub>·z<sub>i+1</sub> + z<sub>i+1</sub>²)·c<sub>i</sub>",
+      "I<sub>z</sub> = ∫y² dA = 1/12·Σ (y<sub>i</sub>² + y<sub>i</sub>·y<sub>i+1</sub> + y<sub>i+1</sub>²)·c<sub>i</sub>",
+      "I<sub>yz</sub> = ∫y·z dA = 1/24·Σ (y<sub>i</sub>·z<sub>i+1</sub> + 2·y<sub>i</sub>·z<sub>i</sub> + 2·y<sub>i+1</sub>·z<sub>i+1</sub> + y<sub>i+1</sub>·z<sub>i</sub>)·c<sub>i</sub>",
+      "Schwerpunkt: y<sub>s</sub> = S<sub>z</sub>/A, z<sub>s</sub> = S<sub>y</sub>/A; danach Verschiebung: I<sub>y,s</sub> = I<sub>y</sub> − A·z<sub>s</sub>² usw.",
+    ],
+    text: "Eingabe: eine Ecke je Zeile als „y z“ in mm (y nach rechts, z nach <b>unten</b>). Dezimalkomma oder -punkt, Trennung durch Leerzeichen oder Semikolon. " +
+      "Eine Leerzeile beginnt eine neue Kontur: die 1. Kontur ist die Außenkontur, jede weitere eine Aussparung (Loch). " +
+      "Umlaufsinn und Wiederholung des Startpunkts sind egal; Kanten dürfen sich nicht kreuzen. " +
+      "Der Rand wird nur einmal umfahren, es werden keine Teilflächen und Steineranteile gebildet. Jede Kontur geht mit ihrem Vorzeichen (Loch negativ) in die Summen ein.",
+    normen: ["Technische Mechanik / Geometrie (kein Normverweis)"],
+  },
+  Iyz: {
+    titel: "Deviationsmoment I<sub>yz</sub>",
+    formeln: ["I<sub>yz</sub> = ∫ y·z dA &nbsp;(bezogen auf die Schwerachsen)"],
+    text: "Bei Querschnitten mit einer Symmetrieachse parallel zu y oder z ist I<sub>yz</sub> = 0. Ist I<sub>yz</sub> ≠ 0, sind y und z keine Hauptachsen: " +
+      "ein Moment um eine Achse erzeugt dann auch eine Krümmung um die andere (schiefe Biegung).",
+  },
+  hauptachsen: {
+    titel: "Hauptträgheitsmomente und Hauptachsen",
+    formeln: [
+      "I<sub>1,2</sub> = (I<sub>y</sub> + I<sub>z</sub>)/2 ± √( ((I<sub>y</sub> − I<sub>z</sub>)/2)² + I<sub>yz</sub>² )",
+      "tan 2α = −2·I<sub>yz</sub> / (I<sub>y</sub> − I<sub>z</sub>)",
+    ],
+    text: "I<sub>1</sub> ist das größte, I<sub>2</sub> das kleinste Flächenmoment 2. Grades. α ist der Winkel der Hauptachse 1 (Achse, um die I<sub>1</sub> wirkt) " +
+      "gegen die y-Achse, positiv in Richtung +z (in der Darstellung im Uhrzeigersinn). Um die Hauptachsen ist das Deviationsmoment null.",
+    normen: ["Technische Mechanik (Hauptachsentransformation)"],
+  },
+  ausnutzung: {
+    titel: "Spannungsnachweis (elastisch)",
+    formeln: [
+      "f<sub>yd</sub> = f<sub>y</sub> / γ<sub>M0</sub>",
+      "Ausnutzung = max |σ| / f<sub>yd</sub> ≤ 1,0",
+    ],
+    text: "Vergleich der größten Normalspannung am Querschnittsrand mit der Bemessungsstreckgrenze. Schubspannungen und die Vergleichsspannung sind nicht enthalten. " +
+      "Bei Querschnitten der Klasse 1 und 2 darf auch plastisch nachgewiesen werden (siehe Tragfähigkeit).",
+    normen: [`${EC3}, 6.2.1(5) (Fließkriterium, elastischer Nachweis)`],
+  },
+  sbSpannung: {
+    titel: "Spannungsverlauf im Querschnitt",
+    formeln: [
+      "Beton: σ<sub>c</sub> = −η·f<sub>cd</sub> &nbsp;konstant über die Höhe λ·x (Spannungsblock)",
+      "Zugbewehrung: σ<sub>s1</sub> = min( ε<sub>s1</sub>·E<sub>s</sub> ; f<sub>yd</sub> )",
+      "Druckbewehrung: σ<sub>s2</sub> = min( |ε<sub>s2</sub>|·E<sub>s</sub> ; f<sub>yd</sub> )",
+    ],
+    text: "Vereinfachter rechteckiger Spannungsblock statt der Parabel-Rechteck-Linie. Beton und Stahl sind in getrennten Maßstäben gezeichnet. " +
+      "Der Beton nimmt keine Zugspannungen auf.",
+    normen: [`${EC2}, 3.1.7(3), Bild 3.5 (Spannungsblock)`, `${EC2}, 3.2.7 (Spannungs-Dehnungs-Linie des Betonstahls)`],
+  },
+
   /* ---------------- Spannungen ---------------- */
 
   sigma: {
     titel: "Normalspannung σ (Navier)",
-    formeln: ["σ(y,z) = N/A + M<sub>y</sub>/I<sub>y</sub> · z + M<sub>z</sub>/I<sub>z</sub> · y"],
-    text: "Zug positiv, Druck negativ. Koordinaten y (nach rechts) und z (nach unten) im Schwerpunkt, y und z sind Hauptachsen. " +
+    formeln: [
+      "σ(y,z) = N/A + M<sub>y</sub>/I<sub>y</sub> · z + M<sub>z</sub>/I<sub>z</sub> · y &nbsp;&nbsp;(I<sub>yz</sub> = 0)",
+      "allgemein: σ = N/A + b<sub>z</sub>·z + b<sub>y</sub>·y",
+      "b<sub>z</sub> = (M<sub>y</sub>·I<sub>z</sub> − M<sub>z</sub>·I<sub>yz</sub>) / (I<sub>y</sub>·I<sub>z</sub> − I<sub>yz</sub>²)",
+      "b<sub>y</sub> = (M<sub>z</sub>·I<sub>y</sub> − M<sub>y</sub>·I<sub>yz</sub>) / (I<sub>y</sub>·I<sub>z</sub> − I<sub>yz</sub>²)",
+    ],
+    text: "Zug positiv, Druck negativ. Koordinaten y (nach rechts) und z (nach unten) im Schwerpunkt. " +
+      "Bei unsymmetrischen Querschnitten (I<sub>yz</sub> ≠ 0) gilt die allgemeine Form (schiefe Biegung). " +
       "N in kN und M in kNm werden intern in N bzw. Nmm umgerechnet.",
     normen: [
       "Navier-Formel (Technische Mechanik)",
@@ -437,7 +499,7 @@ const INFO = {
 /** HTML eines Info-Symbols für den Schlüssel (leer, wenn der Schlüssel unbekannt ist). */
 function infoBtn(key) {
   if (!INFO[key]) { console.warn("Unbekannter Info-Schlüssel:", key); return ""; }
-  return `<button type="button" class="info" data-info="${key}" aria-label="Formel und Norm anzeigen" title="Formel und Norm">i</button>`;
+  return `\u2060<button type="button" class="info" data-info="${key}" aria-label="Formel und Norm anzeigen" title="Formel und Norm">i</button>`;
 }
 
 /** Fenster, das beim Antippen eines Info-Symbols Formel, Erläuterung und Normverweis zeigt. */

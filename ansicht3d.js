@@ -8,6 +8,8 @@
  *  - Spannungsfläche: der Querschnitt, in Richtung Z um sigma * k angehoben und
  *    nach Spannung eingefärbt (Zug rot, Druck blau)
  *  - Weltkoordinaten: X = y, Y = -z (oben ist oben), Z = Spannung
+ * Optional: Grenzspannung (z. B. f_yd). Sie bestimmt Höhen- und Farbskala und wird als Rahmen bei +/- Grenze
+ * eingezeichnet, so dass die Spannungen direkt mit der Streckgrenze verglichen werden können.
  * Bedienung: Ziehen = drehen, Mausrad = zoomen.
  */
 class Ansicht3D {
@@ -35,9 +37,12 @@ class Ansicht3D {
     this.zeichne();
   }
 
-  /** Neue Daten übernehmen und neu zeichnen. */
-  setzeDaten(q, sp, punkte) {
-    this.q = q; this.sp = sp; this.punkte = punkte;
+  /**
+   * Neue Daten übernehmen und neu zeichnen.
+   * @param {number|null} grenze Grenzspannung [N/mm²] (z. B. f_yd) oder null
+   */
+  setzeDaten(q, sp, punkte, grenze = null) {
+    this.q = q; this.sp = sp; this.punkte = punkte; this.grenze = grenze;
     this._vorbereiten();
     this.zeichne();
   }
@@ -51,8 +56,10 @@ class Ansicht3D {
     this.ym = (q.ymin + q.ymax) / 2;
     this.zm = (q.zmin + q.zmax) / 2;
     this.ausdehnung = Math.max(q.ymax - q.ymin, q.zmax - q.zmin);
-    // Höhenskala: größte Spannung entspricht 60 % der Querschnittsabmessung
-    this.k = this.maxAbs > 1e-9 ? 0.6 * this.ausdehnung / this.maxAbs : 0;
+    // Bezugsspannung für Höhe und Farbe: Grenzspannung (falls angegeben), mindestens die größte Spannung
+    this.ref = Math.max(this.maxAbs, this.grenze || 0);
+    // Höhenskala: Bezugsspannung entspricht 60 % der Querschnittsabmessung
+    this.k = this.ref > 1e-9 ? 0.6 * this.ausdehnung / this.ref : 0;
     this.nl = sp.nulllinie();
   }
 
@@ -79,8 +86,8 @@ class Ansicht3D {
 
   /** Farbe nach Spannung: Zug rot, Druck blau, 0 weiß. */
   _farbe(sig) {
-    if (this.maxAbs < 1e-9) return "rgb(225,225,225)";
-    const t = Math.max(-1, Math.min(1, sig / this.maxAbs));
+    if (this.ref < 1e-9) return "rgb(225,225,225)";
+    const t = Math.max(-1, Math.min(1, sig / this.ref));
     const g = Math.round(255 * (1 - 0.85 * Math.abs(t)));
     return t >= 0 ? `rgb(255,${g},${g})` : `rgb(${g},${g},255)`;
   }
@@ -104,6 +111,7 @@ class Ansicht3D {
 
     this._zeichneFlaechen(g);
     this._zeichneKonturen(g);
+    this._zeichneGrenzen(g);
     this._zeichneNulllinie(g);
     this._zeichneMarken(g);
     this._zeichneLegende(g, w, h);
@@ -142,6 +150,23 @@ class Ansicht3D {
       g.moveTo(a.x, a.y); g.lineTo(b.x, b.y);
     }
     g.stroke();
+  }
+
+  /** Rahmen auf der Höhe +/- Grenzspannung (orange gestrichelt): Spannungsfläche darüber = Grenze überschritten. */
+  _zeichneGrenzen(g) {
+    if (!this.grenze) return;
+    const { ymin, ymax, zmin, zmax } = this.q;
+    g.save();
+    g.setLineDash([5, 4]); g.strokeStyle = "#d9822b"; g.lineWidth = 1.5; g.fillStyle = "#a85d10";
+    g.font = "11px system-ui, sans-serif";
+    for (const v of [this.grenze, -this.grenze]) {
+      const c = [[ymin, zmin], [ymax, zmin], [ymax, zmax], [ymin, zmax]].map(([y, z]) => this._p(y, z, v));
+      g.beginPath(); g.moveTo(c[0].x, c[0].y);
+      for (let i = 1; i < 4; i++) g.lineTo(c[i].x, c[i].y);
+      g.closePath(); g.stroke();
+      g.fillText((v > 0 ? "+" : "−") + "f_yd", c[2].x + 4, c[2].y);
+    }
+    g.restore();
   }
 
   /** Spannungsnulllinie (grün gestrichelt). */
@@ -183,8 +208,9 @@ class Ansicht3D {
     g.strokeStyle = "#666"; g.lineWidth = 1; g.strokeRect(x, y, 14, hh);
     g.font = "11px system-ui, sans-serif"; g.fillStyle = "#222"; g.textAlign = "right";
     g.fillText("σ [N/mm²]", x + 14, y - 18);
-    g.fillText("Zug " + fmt(this.maxAbs), x + 14, y - 6);
-    g.fillText("Druck −" + fmt(this.maxAbs), x + 14, y + hh + 14);
+    const bez = this.grenze ? "f_yd " : "";
+    g.fillText("Zug " + bez + fmt(this.ref), x + 14, y - 6);
+    g.fillText("Druck −" + bez + fmt(this.ref), x + 14, y + hh + 14);
     g.textAlign = "left";
   }
 

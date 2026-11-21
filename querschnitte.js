@@ -6,16 +6,20 @@
  * Lokales Koordinatensystem beim Aufbau: Ursprung links oben, y nach rechts, z nach UNTEN.
  * Nach außen (Spannungen, 3D) gelten Schwerpunktkoordinaten (Ursprung im Schwerpunkt).
  * Jeder Querschnitt setzt sich aus Teilflächen zusammen (positiv = Material, negativ = Aussparung).
- * Alle Querschnitte besitzen mindestens eine Symmetrieachse parallel zu y oder z; die Schwerachsen
- * sind damit Hauptachsen (Deviationsmoment Iyz = 0).
+ * Parametrische Querschnitte und Walzprofile besitzen mindestens eine Symmetrieachse parallel zu y oder z;
+ * ihre Schwerachsen sind damit Hauptachsen (Iyz = 0). Frei eingegebene Polygone können unsymmetrisch sein
+ * (Iyz ≠ 0, Hauptachsen gedreht).
  * Einheiten: mm, mm², mm³, mm⁴.
  *
  * Inhalt:
- *  - Geometrie       : Polygon-Hilfsfunktionen (Kennwerte, Beschneiden, Ausrundungen)
+ *  - Geometrie       : Polygon-Hilfsfunktionen (Umfahrungsmethode, Kennwerte, Beschneiden, Ausrundungen)
  *  - Teilflaeche     : RechteckTeil, KreisTeil, PolygonTeil
  *  - Klassifizierung : Querschnittsklassen nach EN 1993-1-1, Tab. 5.2
  *  - Querschnitt     : Basisklasse (Kennwerte, plastisches Widerstandsmoment, Raster)
  *  - Parametrische Querschnitte (Rechteck, T, Doppel-T, Kasten, Kreis, Rohr)
+ *  - PolygonQuerschnitt : frei eingegebene Polygone (auch unsymmetrisch, mit Aussparungen);
+ *                         Querschnittswerte direkt über die Umfahrungsmethode, mit Deviationsmoment
+ *                         und Hauptachsen
  *  - QUERSCHNITTE    : Register (profile.js ergänzt die Walzprofile)
  */
 
@@ -38,6 +42,43 @@ class Geometrie {
     if (A < 1e-12) return { A: 0, y: 0, z: 0, Iy: 0, Iz: 0 };
     const cy = sy / (6 * As), cz = sz / (6 * As);
     return { A, y: cy, z: cz, Iy: s * iyy / 12 - A * cz * cz, Iz: s * izz / 12 - A * cy * cy };
+  }
+
+  /**
+   * Umfahrungsmethode: Flächenmomente eines Polygons als Randintegral (Gaußscher Integralsatz).
+   * Es wird nur der Rand einmal umfahren; Flächen- oder Steineranteile sind nicht nötig.
+   * Alle Größen beziehen sich auf den Koordinatenursprung; der Umlaufsinn ist beliebig.
+   * @returns {{A, Sy, Sz, Iyy, Izz, Iyz}} A, Sy = ∫z dA, Sz = ∫y dA, Iyy = ∫z² dA, Izz = ∫y² dA, Iyz = ∫y·z dA
+   */
+  static umfahre(p) {
+    let a = 0, sy = 0, sz = 0, iyy = 0, izz = 0, iyz = 0;
+    for (let i = 0; i < p.length; i++) {
+      const u = p[i], v = p[(i + 1) % p.length];
+      const c = u.y * v.z - v.y * u.z;                                       // Beitrag der Kante u -> v
+      a += c;
+      sy += (u.z + v.z) * c;
+      sz += (u.y + v.y) * c;
+      iyy += (u.z * u.z + u.z * v.z + v.z * v.z) * c;
+      izz += (u.y * u.y + u.y * v.y + v.y * v.y) * c;
+      iyz += (u.y * v.z + 2 * u.y * u.z + 2 * v.y * v.z + v.y * u.z) * c;
+    }
+    const s = a < 0 ? -1 : 1;                                                // Umlaufsinn normieren
+    return { A: s * a / 2, Sy: s * sy / 6, Sz: s * sz / 6, Iyy: s * iyy / 12, Izz: s * izz / 12, Iyz: s * iyz / 24 };
+  }
+
+  /** Prüft, ob sich Kanten der Konturen (Listen von Punkten) echt kreuzen (Selbstüberschneidung). */
+  static kreuzt(konturen) {
+    const kanten = [];
+    konturen.forEach((k, ki) => k.forEach((a, i) => kanten.push({ a, b: k[(i + 1) % k.length], ki, i, n: k.length })));
+    const o = (p, q, r) => Math.sign((q.y - p.y) * (r.z - p.z) - (q.z - p.z) * (r.y - p.y)); // Orientierung
+    for (let i = 0; i < kanten.length; i++) {
+      for (let j = i + 1; j < kanten.length; j++) {
+        const e = kanten[i], f = kanten[j];
+        if (e.ki === f.ki && (f.i === e.i + 1 || (e.i === 0 && f.i === e.n - 1))) continue; // benachbarte Kanten
+        if (o(e.a, e.b, f.a) * o(e.a, e.b, f.b) < 0 && o(f.a, f.b, e.a) * o(f.a, f.b, e.b) < 0) return true;
+      }
+    }
+    return false;
   }
 
   /** Beschneidet ein Polygon auf den Bereich "Koordinate achse <= g" (Sutherland-Hodgman). */
@@ -279,7 +320,7 @@ class Querschnitt {
   /** Plausibilitätsprüfung; gibt Fehlertext oder null zurück. */
   pruefe() {
     for (const f of this.constructor.felder) {
-      if (f.optionen) continue; // Auswahlfelder prüfen die Unterklassen selbst
+      if (f.optionen || f.text) continue; // Auswahl- und Textfelder prüfen die Unterklassen selbst
       if (!(this.w[f.id] > 0)) return `${f.label} muss größer 0 sein.`;
     }
     return null;
@@ -313,8 +354,12 @@ class Querschnitt {
       Iz += t.vz * (t.iEigenZ() + a * (c.y - this.ys) ** 2);
     }
     this.Iy = Iy; this.Iz = Iz;
+    this.Iyz = 0; // symmetrisch: y und z sind Hauptachsen
+    this._umrandung();
+  }
 
-    // Umrandungsrechteck in Schwerpunktkoordinaten (aus den Materialteilen)
+  /** Umrandungsrechteck in Schwerpunktkoordinaten (aus den Materialteilen). */
+  _umrandung() {
     const pts = this.randpunkte(72);
     this.ymin = Math.min(...pts.map(p => p.y)); this.ymax = Math.max(...pts.map(p => p.y));
     this.zmin = Math.min(...pts.map(p => p.z)); this.zmax = Math.max(...pts.map(p => p.z));
@@ -331,6 +376,16 @@ class Querschnitt {
   get iy() { return Math.sqrt(this.Iy / this.A); }      // Trägheitsradius
   get iz() { return Math.sqrt(this.Iz / this.A); }
   get Ip() { return this.Iy + this.Iz; }                // polares Flächenmoment
+  /** Unsymmetrisch bezüglich y/z? Dann ist Iyz ≠ 0 und die Hauptachsen sind gedreht. */
+  get unsymmetrisch() { return Math.abs(this.Iyz) > 1e-6 * Math.sqrt(this.Iy * this.Iz); }
+  /** Hauptträgheitsmomente I1 ≥ I2 (um die Hauptachsen durch den Schwerpunkt). */
+  get I1() { return (this.Iy + this.Iz) / 2 + Math.hypot((this.Iy - this.Iz) / 2, this.Iyz); }
+  get I2() { return (this.Iy + this.Iz) / 2 - Math.hypot((this.Iy - this.Iz) / 2, this.Iyz); }
+  /**
+   * Winkel der Hauptachse 1 (um die I1 wirkt) gegen die y-Achse [rad], positiv in Richtung +z
+   * (in der Darstellung im Uhrzeigersinn). Bereich -45° … +45° bei Iy ≥ Iz, sonst darüber hinaus.
+   */
+  get alphaHaupt() { return this.unsymmetrisch ? 0.5 * Math.atan2(-2 * this.Iyz, this.Iy - this.Iz) : 0; }
   get masse() { return this.A * 7850e-6; }              // Masse je Meter für Stahl (7850 kg/m³) in kg/m
   get Wply() { return this.plastisch("y").W; }          // plastisches Widerstandsmoment um y
   get Wplz() { return this.plastisch("z").W; }          // plastisches Widerstandsmoment um z
@@ -562,6 +617,91 @@ class Rohr extends Querschnitt {
   schubflaechen() { return { z: 2 * this.A / Math.PI, y: 2 * this.A / Math.PI, hinweis: "Rohr: A<sub>v</sub> = 2A/π." }; }
 }
 
+/* ======================= Frei eingegebene Polygone ======================= */
+
+/**
+ * Beliebiger polygonaler Querschnitt aus Koordinaten (y nach rechts, z nach unten, mm).
+ * Eingabe: eine Ecke je Zeile "y z"; eine Leerzeile beginnt eine neue Kontur.
+ * Die 1. Kontur ist die Außenkontur, alle weiteren sind Aussparungen (Löcher).
+ * Querschnittswerte: Umfahrungsmethode (Randintegral) über alle Konturen; keine Teilflächen/Steineranteile.
+ */
+class PolygonQuerschnitt extends Querschnitt {
+  static get titel() { return "Beliebiges Polygon (Koordinaten)"; }
+  static get gruppe() { return "Freie Eingabe"; }
+  static get felder() {
+    return [{
+      id: "pts", text: true, zeilen: 9, info: "polygon",
+      label: "Eckpunkte y z [mm] (eine Ecke je Zeile)",
+      wert: "0 0\n100 0\n100 10\n10 10\n10 100\n0 100",   // Beispiel: Winkelprofil L 100x10
+    }];
+  }
+
+  /** Text in Konturen (Listen von {y, z}) zerlegen. Wirft Error bei ungültigen Zeilen. */
+  static parse(text) {
+    const konturen = [];
+    let akt = [];
+    const ende = () => {
+      if (akt.length > 1 && akt[0].y === akt[akt.length - 1].y && akt[0].z === akt[akt.length - 1].z) akt.pop(); // Schlusspunkt = Startpunkt
+      if (akt.length) konturen.push(akt);
+      akt = [];
+    };
+    for (const zeile of String(text).split(/\r?\n/)) {
+      const t = zeile.trim();
+      if (!t) { ende(); continue; }
+      const teile = t.replace(/;/g, " ").replace(/,/g, ".").split(/\s+/).map(Number);   // Komma = Dezimaltrennzeichen
+      if (teile.length !== 2 || teile.some(x => !Number.isFinite(x))) throw new Error(`Zeile „${t}“: erwartet werden zwei Zahlen „y z“.`);
+      const p = { y: teile[0], z: teile[1] };
+      const l = akt[akt.length - 1];
+      if (!l || l.y !== p.y || l.z !== p.z) akt.push(p);                                // doppelte Punkte überspringen
+    }
+    ende();
+    return konturen;
+  }
+
+  pruefe() {
+    const k = PolygonQuerschnitt.parse(this.w.pts);
+    if (!k.length) return "Bitte mindestens drei Eckpunkte eingeben.";
+    k.forEach((c, i) => { if (c.length < 3) throw new Error(`Kontur ${i + 1} hat weniger als drei Punkte.`); });
+    if (Geometrie.kreuzt(k)) return "Die Kanten überschneiden sich (Kontur kreuzt sich selbst oder eine andere Kontur).";
+
+    // Verschiebung in die Mitte des Umrandungsrechtecks: hält die Zahlen klein (numerisch günstiger)
+    const alle = k.flat();
+    this._versch = {
+      y: (Math.min(...alle.map(p => p.y)) + Math.max(...alle.map(p => p.y))) / 2,
+      z: (Math.min(...alle.map(p => p.z)) + Math.max(...alle.map(p => p.z))) / 2,
+    };
+    this._konturen = k.map(c => c.map(p => ({ y: p.y - this._versch.y, z: p.z - this._versch.z })));
+
+    // Aussparungen müssen (überwiegend) in der Außenkontur liegen
+    const aussen = new PolygonTeil(this._konturen[0]);
+    for (let i = 1; i < this._konturen.length; i++) {
+      const c = this._konturen[i];
+      if (c.filter(p => !aussen.enthaelt(p.y, p.z)).length > c.length / 2) return `Kontur ${i + 1} (Aussparung) liegt nicht innerhalb der Außenkontur.`;
+    }
+    let A = 0;
+    this._konturen.forEach((c, i) => { A += (i ? -1 : 1) * Geometrie.umfahre(c).A; });
+    return A > 1e-9 ? null : "Die Querschnittsfläche ist null oder negativ.";
+  }
+
+  erzeugeTeile() { return this._konturen.map((c, i) => new PolygonTeil(c, i === 0 ? 1 : -1)); }
+
+  /** Querschnittswerte direkt durch Umfahren aller Konturen (Außenkontur +, Aussparungen −). */
+  _kennwerte() {
+    let A = 0, Sy = 0, Sz = 0, Iyy = 0, Izz = 0, Iyz = 0;
+    this._konturen.forEach((c, i) => {
+      const m = Geometrie.umfahre(c), v = i === 0 ? 1 : -1;
+      A += v * m.A; Sy += v * m.Sy; Sz += v * m.Sz; Iyy += v * m.Iyy; Izz += v * m.Izz; Iyz += v * m.Iyz;
+    });
+    this.A = A;
+    this.ys = Sz / A;                       // Schwerpunkt (lokal)
+    this.zs = Sy / A;
+    this.Iy = Iyy - A * this.zs ** 2;       // auf den Schwerpunkt verschieben (Steiner einmalig für das Gesamtergebnis)
+    this.Iz = Izz - A * this.ys ** 2;
+    this.Iyz = Iyz - A * this.ys * this.zs;
+    this._umrandung();
+  }
+}
+
 /** Register aller Querschnitte (Schlüssel -> Klasse). Neue Querschnitte hier oder in profile.js ergänzen. */
 const QUERSCHNITTE = {
   rechteck: Rechteck,
@@ -570,4 +710,5 @@ const QUERSCHNITTE = {
   kasten: Kasten,
   kreis: Kreis,
   rohr: Rohr,
+  polygon: PolygonQuerschnitt,
 };

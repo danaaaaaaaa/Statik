@@ -8,7 +8,8 @@
  *   My > 0 : Zug auf der Seite z > 0 (unten)
  *   Mz > 0 : Zug auf der Seite y > 0 (rechts)
  *   sigma > 0 : Zug, sigma < 0 : Druck
- * Koordinaten (y, z) in mm, Ursprung im Schwerpunkt, z nach unten.
+ * Koordinaten (y, z) in mm, Ursprung im Schwerpunkt, z nach unten. Bei unsymmetrischen Querschnitten
+ * (Iyz ≠ 0) wird die schiefe Biegung über das Deviationsmoment erfasst.
  * Eingabe: N in kN, M in kNm. Ausgabe: Spannung in N/mm².
  */
 class Spannung {
@@ -22,13 +23,18 @@ class Spannung {
     this.q = q; this.N = N; this.My = My; this.Mz = Mz;
   }
 
-  /** Koeffizienten der Spannungsebene sigma = a0 + bz*z + by*y */
+  /**
+   * Koeffizienten der Spannungsebene sigma = a0 + bz*z + by*y.
+   * Allgemein (auch bei Iyz ≠ 0) aus  My = bz·Iy + by·Iyz  und  Mz = bz·Iyz + by·Iz.
+   * Für Iyz = 0 ergibt sich bz = My/Iy und by = Mz/Iz.
+   */
   get koeff() {
-    const q = this.q;
+    const q = this.q, My = this.My * 1e6, Mz = this.Mz * 1e6;
+    const D = q.Iy * q.Iz - q.Iyz ** 2;
     return {
       a0: this.N * 1e3 / q.A,
-      bz: this.My * 1e6 / q.Iy,
-      by: this.Mz * 1e6 / q.Iz,
+      bz: (My * q.Iz - Mz * q.Iyz) / D,
+      by: (Mz * q.Iy - My * q.Iyz) / D,
     };
   }
 

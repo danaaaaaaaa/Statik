@@ -1,13 +1,16 @@
 # Statik-Rechner
 
-Webapp (reines HTML/CSS/JavaScript, keine Installation, läuft offline) mit:
+Webapp (reines HTML/CSS/JavaScript, keine Installation, läuft offline) mit Startseite und zwei Bereichen
+(Zurück-Taste und Lesezeichen funktionieren: `#stahlbau`, `#massivbau`):
 
-- **Startseite** mit den Bereichen **Stahlbau** und **Massivbau** (Zurück-Taste und Lesezeichen funktionieren: `#stahlbau`, `#massivbau`)
-- **Walzprofile** (IPE, HEA, HEB, HEM, UPN, Rund-, Quadrat-, Rechteckrohre) und **Tragfähigkeit** (Klassen, Mel, Mpl, Npl, Vpl)
+- **Stahlbau** (alles auf einer Seite, Querschnitt und Stahlgüte nur einmal eingeben):
+  Querschnittswerte (A, Schwerpunkt, Iy, Iz, Iyz, Hauptachsen, W, Wpl, i, Sy), Querschnittsklassen,
+  Mel, Mpl, Mc, Npl, Vpl sowie elastische Spannungen (N, My, Mz) mit 3D-Ansicht und Vergleich mit f_yd
+- **Querschnitte**: parametrische Formen, Walzprofile (IPE, HEA, HEB, HEM, UPN, Rund-, Quadrat-, Rechteckrohre)
+  und **beliebige Polygone** per Koordinateneingabe (auch unsymmetrisch, mit Aussparungen);
+  die Werte der Polygone werden mit der Umfahrungsmethode (Randintegral) berechnet
+- **Massivbau**: Biegebemessung nach EC 2 mit NA (DE) für Rechteck und Plattenbalken inkl. Dehnungsebene und Spannungsverlauf
 - **Info-Symbol (i)** hinter den Werten: Berechnungsformel und Normkapitel (EC 2, EC 3, EN 1990)
-- **Spannungen & 3D**: elastische Normalspannungen (N, My, Mz) an beliebigen Punkten, 3D-Spannungsfläche
-- **Querschnittswerte**: A, Schwerpunkt, Iy, Iz, Ip, Wy,o/u, Wz, iy, iz, Sy
-- **Stahlbeton**: Biegebemessung nach EC 2 NA (DE) für Rechteck und Plattenbalken inkl. Dehnungsebene
 
 ## Dateien (alle in den Hauptordner des Repositories, nicht in Unterordner)
 
