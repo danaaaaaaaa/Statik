@@ -13,25 +13,47 @@
 </head>
 <body>
   <header>
-    <h1>Statik-Rechner</h1>
-    <nav>
-      <button class="tab aktiv" data-tab="spannung">Spannungen &amp; 3D</button>
-      <button class="tab" data-tab="werte">Querschnittswerte</button>
-      <button class="tab" data-tab="tragf">Tragfähigkeit</button>
-      <button class="tab" data-tab="stahlbeton">Stahlbeton</button>
+    <h1><a href="#start" id="home" title="Zur Startseite">Statik-Rechner</a></h1>
+    <!-- data-bereich: in welchen Bereichen der Tab erscheint (Steuerung in app.js, Klasse App) -->
+    <nav id="nav" hidden>
+      <button class="tab" data-tab="werte" data-bereich="stahlbau massivbau">Querschnittswerte</button>
+      <button class="tab" data-tab="spannung" data-bereich="stahlbau massivbau">Spannungen &amp; 3D</button>
+      <button class="tab" data-tab="tragf" data-bereich="stahlbau">Tragfähigkeit</button>
+      <button class="tab" data-tab="stahlbeton" data-bereich="massivbau">Biegebemessung</button>
     </nav>
   </header>
 
   <main>
+    <!-- ===== Startseite ===== -->
+    <section id="tab-start" class="tab-inhalt start aktiv">
+      <h2>Bereich wählen</h2>
+      <div class="karten">
+        <a class="karte" href="#stahlbau">
+          <h3>Stahlbau</h3>
+          <p>Walzprofile und Standardquerschnitte, Querschnittswerte, Querschnittsklassen,
+            elastische und plastische Tragfähigkeit, Spannungen mit 3D-Ansicht.</p>
+          <span class="los">Öffnen →</span>
+        </a>
+        <a class="karte" href="#massivbau">
+          <h3>Massivbau</h3>
+          <p>Biegebemessung nach EC 2 mit NA (DE) für Rechteck und Plattenbalken inklusive
+            Dehnungsebene; Querschnittswerte und Spannungen.</p>
+          <span class="los">Öffnen →</span>
+        </a>
+      </div>
+      <p class="hinweis">Hinter den Werten steht ein Symbol <button type="button" class="info" data-info="A">i</button> mit Berechnungsformel und Normverweis.
+        Die Ergebnisse ersetzen keine geprüfte statische Berechnung.</p>
+    </section>
+
     <!-- ===== Tab 1: Elastische Spannungsberechnung ===== -->
-    <section id="tab-spannung" class="tab-inhalt aktiv">
+    <section id="tab-spannung" class="tab-inhalt">
       <div class="eingabe">
         <h2>Querschnitt</h2>
         <label>Form <select id="qs-typ"></select></label>
         <div id="qs-felder" class="raster"></div>
         <div id="qs-kennwerte" class="kennwerte"></div>
 
-        <h2>Schnittgrößen</h2>
+        <h2>Schnittgrößen <button type="button" class="info" data-info="sigma">i</button></h2>
         <div class="raster">
           <label>N [kN] (Zug +)<input type="number" id="in-N" value="0" step="any"></label>
           <label>M<sub>y</sub> [kNm]<input type="number" id="in-My" value="50" step="any"></label>
@@ -95,8 +117,8 @@
 
         <h2>Baustahl</h2>
         <div class="raster">
-          <label>Stahlgüte<select id="tf-guete"></select></label>
-          <label>γ<sub>M0</sub> [–]<input type="number" id="tf-gm0" value="1" step="any"></label>
+          <label><span>Stahlgüte f<sub>y</sub> <button type="button" class="info" data-info="fy">i</button></span><select id="tf-guete"></select></label>
+          <label><span>γ<sub>M0</sub> [–] <button type="button" class="info" data-info="gammaM0">i</button></span><input type="number" id="tf-gm0" value="1" step="any"></label>
         </div>
         <p class="hinweis">f<sub>y</sub> gilt für Blechdicken t ≤ 40 mm (EN 10025). γ<sub>M0</sub> = 1,0 nach NA (DE).
           Gerechnet wird mit den Querschnittswerten aus den Katalogabmessungen.</p>
@@ -122,9 +144,9 @@
         <div class="raster">
           <label><span id="sb-lbl-b">Breite b [cm]</span><input type="number" id="sb-b" value="30" step="any"></label>
           <label>Höhe h [cm]<input type="number" id="sb-h" value="60" step="any"></label>
-          <label class="nur-pb versteckt">Gurtbreite b<sub>eff</sub> [cm]<input type="number" id="sb-bf" value="120" step="any"></label>
+          <label class="nur-pb versteckt"><span>Gurtbreite b<sub>eff</sub> [cm] <button type="button" class="info" data-info="beff">i</button></span><input type="number" id="sb-bf" value="120" step="any"></label>
           <label class="nur-pb versteckt">Gurtdicke h<sub>f</sub> [cm]<input type="number" id="sb-hf" value="20" step="any"></label>
-          <label>d<sub>1</sub> Zugbewehrung [cm]<input type="number" id="sb-d1" value="5" step="any"></label>
+          <label><span>d<sub>1</sub> Zugbewehrung [cm] <button type="button" class="info" data-info="d1d2">i</button></span><input type="number" id="sb-d1" value="5" step="any"></label>
           <label>d<sub>2</sub> Druckbewehrung [cm]<input type="number" id="sb-d2" value="5" step="any"></label>
         </div>
         <p class="hinweis">d<sub>1</sub>/d<sub>2</sub> = Abstand Bewehrungsschwerpunkt zum jeweiligen Rand.
@@ -132,12 +154,12 @@
 
         <h2>Baustoffe</h2>
         <div class="raster">
-          <label>Beton<select id="sb-beton"></select></label>
-          <label>Betonstahl<select id="sb-stahl"><option>B500B</option></select></label>
+          <label><span>Beton <button type="button" class="info" data-info="sbBeton">i</button></span><select id="sb-beton"></select></label>
+          <label><span>Betonstahl <button type="button" class="info" data-info="sbStahl">i</button></span><select id="sb-stahl"><option>B500B</option></select></label>
         </div>
 
         <h2>Einwirkung</h2>
-        <label>M<sub>Ed</sub> [kNm] (negativ = Zug oben)<input type="number" id="sb-M" value="250" step="any"></label>
+        <label><span>M<sub>Ed</sub> [kNm] (negativ = Zug oben) <button type="button" class="info" data-info="MEd">i</button></span><input type="number" id="sb-M" value="250" step="any"></label>
       </div>
 
       <div class="ansicht">
@@ -151,6 +173,7 @@
   </main>
 
   <script src="util.js"></script>
+  <script src="info.js"></script>
   <script src="querschnitte.js"></script>
   <script src="profile.js"></script>
   <script src="spannung.js"></script>

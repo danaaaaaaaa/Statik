@@ -51,3 +51,44 @@ td button { border: 0; background: none; cursor: pointer; color: #b00020; font-s
   canvas { height: 360px; }
   .ergebnis, .kennwerte { font-size: .82rem; }
 }
+
+/* ---------- Kopfzeile: Link zur Startseite ---------- */
+header h1 a { color: #fff; text-decoration: none; }
+nav[hidden] { display: none; }
+.tab[hidden] { display: none; }
+
+/* ---------- Startseite ---------- */
+.tab-inhalt.start.aktiv { display: block; max-width: 900px; margin: 0 auto; }
+.karten { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: .8rem 0; }
+.karte { display: block; padding: 1.1rem 1.2rem; border: 1px solid var(--rand); border-radius: 10px; background: var(--grau);
+  color: #222; text-decoration: none; border-left: 6px solid var(--blau); }
+.karte:hover, .karte:focus-visible { background: #e8eef5; }
+.karte h3 { margin: 0 0 .4rem; font-size: 1.2rem; color: var(--blau); }
+.karte p { margin: 0 0 .7rem; font-size: .9rem; color: #444; }
+.karte .los { color: var(--blau); font-weight: 600; }
+
+/* ---------- Info-Symbol und Fenster ---------- */
+button.info { display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; padding: 0; margin-left: .25rem;
+  border: 1px solid var(--blau); border-radius: 50%; background: #fff; color: var(--blau); font: italic 700 .75rem Georgia, serif;
+  cursor: pointer; vertical-align: middle; }
+button.info:hover, button.info:focus-visible { background: var(--blau); color: #fff; }
+/* td button (Löschen-Knopf) darf das Info-Symbol nicht überschreiben */
+td button.info { color: var(--blau); font-size: .75rem; padding: 0; }
+td button.info:hover { color: #fff; }
+label > span { display: block; }
+
+#info-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
+#info-overlay[hidden] { display: none; }
+#info-panel { position: relative; background: #fff; width: 100%; max-width: 560px; max-height: 80vh; overflow-y: auto;
+  border-radius: 14px 14px 0 0; padding: 1rem 1.1rem calc(1rem + env(safe-area-inset-bottom)); }
+@media (min-width: 700px) { #info-overlay { align-items: center; } #info-panel { border-radius: 14px; } }
+#info-panel h3 { margin: 0 2rem .6rem 0; font-size: 1.05rem; color: var(--blau); }
+#info-zu { position: absolute; top: .5rem; right: .6rem; border: 0; background: none; font-size: 1.3rem; cursor: pointer; padding: .3rem .5rem; }
+.formel { background: var(--grau); border-left: 4px solid var(--blau); border-radius: 4px; padding: .4rem .6rem; margin: .4rem 0;
+  font-family: Georgia, "Times New Roman", serif; font-size: .95rem; overflow-x: auto; }
+.infotext { font-size: .88rem; margin: .6rem 0; }
+.infokopf { font-size: .78rem; font-weight: 700; text-transform: uppercase; color: #666; margin: .8rem 0 .2rem; }
+.normen { margin: 0; padding-left: 1.2rem; font-size: .88rem; }
+.infohinweis { font-size: .72rem; color: #777; margin: .7rem 0 0; }
+
+@media (max-width: 600px) { .karten { grid-template-columns: 1fr; } }

@@ -14,6 +14,8 @@
 
 /** Tabellenzeile: Bezeichnung | Wert | Einheit */
 const zeile = (l, w, e = "") => `<tr><td>${l}</td><td>${w}</td><td>${e}</td></tr>`;
+/** Bezeichnung mit Info-Symbol (Formel und Norm, siehe info.js) */
+const lbl = (text, key) => text + infoBtn(key);
 /** Tabellenzeile mit beliebig vielen Zellen */
 const zeileN = (...zellen) => "<tr>" + zellen.map(z => `<td>${z}</td>`).join("") + "</tr>";
 
@@ -143,7 +145,8 @@ class SpannungsTab {
 
     const e = sp.extremwerte();
     document.getElementById("sp-extrem").innerHTML =
-      `σ<sub>max</sub> = <b>${fmt(e.max.wert)}</b> N/mm² bei y = ${fmt(e.max.y, 1)}, z = ${fmt(e.max.z, 1)} mm<br>` +
+      `Nulllinie ${infoBtn("nulllinie")}<br>` +
+      `σ<sub>max</sub> ${infoBtn("sigmaExtrem")} = <b>${fmt(e.max.wert)}</b> N/mm² bei y = ${fmt(e.max.y, 1)}, z = ${fmt(e.max.z, 1)} mm<br>` +
       `σ<sub>min</sub> = <b>${fmt(e.min.wert)}</b> N/mm² bei y = ${fmt(e.min.y, 1)}, z = ${fmt(e.min.z, 1)} mm`;
 
     this.zeigePunkte(q, sp);
@@ -230,24 +233,24 @@ class QuerschnittswerteTab {
     catch (e) { box.innerHTML = `<span class="fehler">${e.message}</span>`; return; }
 
     let h = "<table>";
-    h += zeile("Breite b", fmt(q.breite, 1), "mm");
-    h += zeile("Höhe h", fmt(q.hoehe, 1), "mm");
-    h += zeile("<b>Fläche A</b>", `<b>${fmt(q.A / 100, 2)}</b>`, "cm²");
-    h += zeile("Masse (Stahl, 7850 kg/m³)", fmt(q.masse, 1), "kg/m");
-    h += zeile("Schwerpunkt z<sub>s</sub> von Oberkante", fmt(Math.abs(q.zmin), 1), "mm");
+    h += zeile(lbl("Breite b","breite"), fmt(q.breite, 1), "mm");
+    h += zeile(lbl("Höhe h","hoehe"), fmt(q.hoehe, 1), "mm");
+    h += zeile(lbl("<b>Fläche A</b>","A"), `<b>${fmt(q.A / 100, 2)}</b>`, "cm²");
+    h += zeile(lbl("Masse (Stahl, 7850 kg/m³)","masse"), fmt(q.masse, 1), "kg/m");
+    h += zeile(lbl("Schwerpunkt z<sub>s</sub> von Oberkante","zs"), fmt(Math.abs(q.zmin), 1), "mm");
     h += zeile("Schwerpunkt z<sub>s</sub> von Unterkante", fmt(q.zmax, 1), "mm");
-    h += zeile("Schwerpunkt y<sub>s</sub> von linker Kante", fmt(Math.abs(q.ymin), 1), "mm");
-    h += zeile("<b>Trägheitsmoment I<sub>y</sub></b>", `<b>${fmt(q.Iy / 1e4, 1)}</b>`, "cm⁴");
-    h += zeile("<b>Trägheitsmoment I<sub>z</sub></b>", `<b>${fmt(q.Iz / 1e4, 1)}</b>`, "cm⁴");
-    h += zeile("Polares Moment I<sub>p</sub> = I<sub>y</sub> + I<sub>z</sub>", fmt(q.Ip / 1e4, 1), "cm⁴");
-    h += zeile("<b>Widerstandsmoment W<sub>y,o</sub></b> (oben)", `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
-    h += zeile("<b>Widerstandsmoment W<sub>y,u</sub></b> (unten)", `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
-    h += zeile("<b>Widerstandsmoment W<sub>z</sub></b>", `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
-    h += zeile("<b>Plastisches Moment W<sub>pl,y</sub></b>", `<b>${fmt(q.Wply / 1e3, 2)}</b>`, "cm³");
-    h += zeile("<b>Plastisches Moment W<sub>pl,z</sub></b>", `<b>${fmt(q.Wplz / 1e3, 2)}</b>`, "cm³");
-    h += zeile("Trägheitsradius i<sub>y</sub>", fmt(q.iy / 10, 2), "cm");
-    h += zeile("Trägheitsradius i<sub>z</sub>", fmt(q.iz / 10, 2), "cm");
-    h += zeile("Statisches Moment S<sub>y</sub> (über Schwerachse)", fmt(q.Sy / 1e3, 2), "cm³");
+    h += zeile(lbl("Schwerpunkt y<sub>s</sub> von linker Kante","ys"), fmt(Math.abs(q.ymin), 1), "mm");
+    h += zeile(lbl("<b>Trägheitsmoment I<sub>y</sub></b>","Iy"), `<b>${fmt(q.Iy / 1e4, 1)}</b>`, "cm⁴");
+    h += zeile(lbl("<b>Trägheitsmoment I<sub>z</sub></b>","Iz"), `<b>${fmt(q.Iz / 1e4, 1)}</b>`, "cm⁴");
+    h += zeile(lbl("Polares Moment I<sub>p</sub> = I<sub>y</sub> + I<sub>z</sub>","Ip"), fmt(q.Ip / 1e4, 1), "cm⁴");
+    h += zeile(lbl("<b>Widerstandsmoment W<sub>y,o</sub></b> (oben)","Wyo"), `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>Widerstandsmoment W<sub>y,u</sub></b> (unten)","Wyu"), `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>Widerstandsmoment W<sub>z</sub></b>","Wz"), `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>Plastisches Moment W<sub>pl,y</sub></b>","Wpl"), `<b>${fmt(q.Wply / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>Plastisches Moment W<sub>pl,z</sub></b>","Wpl"), `<b>${fmt(q.Wplz / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("Trägheitsradius i<sub>y</sub>","iy"), fmt(q.iy / 10, 2), "cm");
+    h += zeile(lbl("Trägheitsradius i<sub>z</sub>","iz"), fmt(q.iz / 10, 2), "cm");
+    h += zeile(lbl("Statisches Moment S<sub>y</sub> (über Schwerachse)","Sy"), fmt(q.Sy / 1e3, 2), "cm³");
     h += "</table>";
     box.innerHTML = h;
     this.skizze.zeichne(q);
@@ -290,33 +293,33 @@ class TragfaehigkeitTab {
     const zahlOderStrich = (v, d) => (v === null ? "–" : fmt(v, d));
 
     let h = "<table>";
-    h += zeile("Streckgrenze f<sub>y</sub>", fmt(r.fy, 0), "N/mm²");
-    h += zeile("ε = √(235/f<sub>y</sub>)", fmt(r.eps, 3), "–");
-    h += zeile("Fläche A", fmt(q.A / 100, 2), "cm²");
+    h += zeile(lbl("Streckgrenze f<sub>y</sub>","fy"), fmt(r.fy, 0), "N/mm²");
+    h += zeile(lbl("ε = √(235/f<sub>y</sub>)","eps"), fmt(r.eps, 3), "–");
+    h += zeile(lbl("Fläche A","A"), fmt(q.A / 100, 2), "cm²");
     h += zeile("Masse (Stahl)", fmt(q.masse, 1), "kg/m");
     h += "</table>";
 
     h += "<p><b>Biegung</b></p><table><tr><th></th><th>y–y</th><th>z–z</th><th></th></tr>";
-    h += zeileN("W<sub>el</sub>", fmt(r.y.Wel / 1e3, 1), fmt(r.z.Wel / 1e3, 1), "cm³");
-    h += zeileN("W<sub>pl</sub>", fmt(r.y.Wpl / 1e3, 1), fmt(r.z.Wpl / 1e3, 1), "cm³");
-    h += zeileN("α<sub>pl</sub> = W<sub>pl</sub>/W<sub>el</sub>", fmt(r.y.alpha, 3), fmt(r.z.alpha, 3), "–");
-    h += zeileN("Lage pl. Nulllinie*", fmt(r.y.lage, 1), fmt(r.z.lage, 1), "mm");
-    h += zeileN("Querschnittsklasse", kl(r.y.klasse), kl(r.z.klasse), "");
-    h += zeileN("M<sub>el,Rd</sub> = W<sub>el</sub>·f<sub>y</sub>/γ<sub>M0</sub>", fmt(r.y.Mel, 1), fmt(r.z.Mel, 1), "kNm");
-    h += zeileN("M<sub>pl,Rd</sub> = W<sub>pl</sub>·f<sub>y</sub>/γ<sub>M0</sub>", fmt(r.y.Mpl, 1), fmt(r.z.Mpl, 1), "kNm");
-    h += zeileN("<b>M<sub>c,Rd</sub></b> (nach Klasse)", `<b>${zahlOderStrich(r.y.Mc, 1)}</b>`, `<b>${zahlOderStrich(r.z.Mc, 1)}</b>`, "kNm");
+    h += zeileN(lbl("W<sub>el</sub>","Wel"), fmt(r.y.Wel / 1e3, 1), fmt(r.z.Wel / 1e3, 1), "cm³");
+    h += zeileN(lbl("W<sub>pl</sub>","Wpl"), fmt(r.y.Wpl / 1e3, 1), fmt(r.z.Wpl / 1e3, 1), "cm³");
+    h += zeileN(lbl("α<sub>pl</sub> = W<sub>pl</sub>/W<sub>el</sub>","alpha"), fmt(r.y.alpha, 3), fmt(r.z.alpha, 3), "–");
+    h += zeileN(lbl("Lage pl. Nulllinie*","pna"), fmt(r.y.lage, 1), fmt(r.z.lage, 1), "mm");
+    h += zeileN(lbl("Querschnittsklasse","klasse"), kl(r.y.klasse), kl(r.z.klasse), "");
+    h += zeileN(lbl("M<sub>el,Rd</sub> = W<sub>el</sub>·f<sub>y</sub>/γ<sub>M0</sub>","Mel"), fmt(r.y.Mel, 1), fmt(r.z.Mel, 1), "kNm");
+    h += zeileN(lbl("M<sub>pl,Rd</sub> = W<sub>pl</sub>·f<sub>y</sub>/γ<sub>M0</sub>","Mpl"), fmt(r.y.Mpl, 1), fmt(r.z.Mpl, 1), "kNm");
+    h += zeileN(lbl("<b>M<sub>c,Rd</sub></b> (nach Klasse)","Mc"), `<b>${zahlOderStrich(r.y.Mc, 1)}</b>`, `<b>${zahlOderStrich(r.z.Mc, 1)}</b>`, "kNm");
     h += "</table><p class=\"hinweis\">* Abstand der plastischen Nulllinie vom Schwerpunkt (z nach unten, y nach rechts).</p>";
 
     h += "<p><b>Normalkraft und Querkraft</b></p><table><tr><th></th><th>V<sub>z</sub> / Druck</th><th>V<sub>y</sub></th><th></th></tr>";
-    h += zeileN("Klasse (Druck)", kl(r.klasseDruck), "", "");
-    h += zeileN("N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub>", fmt(r.Npl, 1), "", "kN");
-    h += zeileN("A<sub>v</sub>", r.Av && r.Av.z ? fmt(r.Av.z / 100, 2) : "–", r.Av && r.Av.y ? fmt(r.Av.y / 100, 2) : "–", "cm²");
-    h += zeileN("<b>V<sub>pl,Rd</sub></b> = A<sub>v</sub>·f<sub>y</sub>/(√3·γ<sub>M0</sub>)", `<b>${zahlOderStrich(r.Vz, 1)}</b>`, `<b>${zahlOderStrich(r.Vy, 1)}</b>`, "kN");
+    h += zeileN(lbl("Klasse (Druck)","klasse"), kl(r.klasseDruck), "", "");
+    h += zeileN(lbl("N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub>","Npl"), fmt(r.Npl, 1), "", "kN");
+    h += zeileN(lbl("A<sub>v</sub>","Av"), r.Av && r.Av.z ? fmt(r.Av.z / 100, 2) : "–", r.Av && r.Av.y ? fmt(r.Av.y / 100, 2) : "–", "cm²");
+    h += zeileN(lbl("<b>V<sub>pl,Rd</sub></b> = A<sub>v</sub>·f<sub>y</sub>/(√3·γ<sub>M0</sub>)","Vpl"), `<b>${zahlOderStrich(r.Vz, 1)}</b>`, `<b>${zahlOderStrich(r.Vy, 1)}</b>`, "kN");
     h += "</table>";
 
     // Klassifizierung im Detail
     if (r.klassen) {
-      h += "<p><b>Querschnittsklassen</b> (EN 1993-1-1, Tab. 5.2)</p><ul>";
+      h += `<p><b>Querschnittsklassen</b> (EN 1993-1-1, Tab. 5.2) ${infoBtn("klasse")}</p><ul>`;
       for (const [name, k] of [["Biegung y–y", r.klassen.biegungY], ["Biegung z–z", r.klassen.biegungZ], ["Druck", r.klassen.druck]]) {
         const teile = k.teile.map(t => `${t.name} c/t = ${fmt(t.ct, 1)} (Kl. ${t.klasse})`).join(", ");
         h += `<li>${name}: <b>Klasse ${k.klasse}</b>${teile ? " – " + teile : ""}${k.hinweis ? " – " + k.hinweis : ""}</li>`;
@@ -472,16 +475,16 @@ class StahlbetonTab {
     const haken = ok => ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>';
 
     let h = `<b>${r.fall}</b> – ${r.druckzone}${r.negativ ? " (Zug oben)" : ""}<table>`;
-    h += zeile("f<sub>cd</sub> / f<sub>yd</sub>", `${fmt(r.fcd)} / ${fmt(r.fyd)}`, "N/mm²");
-    h += zeile("λ / η / ε<sub>cu2</sub>", `${fmt(r.lambda)} / ${fmt(r.eta)} / ${fmt(r.epsCu2, 1)}`, "– / – / ‰");
-    h += zeile("Nutzhöhe d", fmt(r.d / 10, 1), "cm");
-    h += zeile("Druckzonenhöhe x", fmt(r.x / 10, 1), "cm");
-    h += zeile("ξ = x/d", `${fmt(r.xi, 3)} (≤ ${fmt(r.xiLim, 2)})`, haken(r.xiOk));
-    h += zeile("A<sub>s1</sub> erforderlich", fmt(r.As1erf / 100), "cm²");
-    h += zeile("A<sub>s,min</sub>", fmt(r.AsMin / 100), "cm²");
-    h += zeile("<b>A<sub>s1</sub> maßgebend</b>", `<b>${fmt(r.As1 / 100)}</b>`, "cm²");
-    if (r.As2 > 0) h += zeile("<b>A<sub>s2</sub> (Druckbewehrung)</b>", `<b>${fmt(r.As2 / 100)}</b>`, "cm²");
-    h += zeile("A<sub>s,max</sub> = 0,04·A<sub>c</sub>", fmt(r.AsMax / 100), haken(r.AsMaxOk) + " cm²");
+    h += zeile(lbl("f<sub>cd</sub>","fcd") + " / " + lbl("f<sub>yd</sub>","fyd"), `${fmt(r.fcd)} / ${fmt(r.fyd)}`, "N/mm²");
+    h += zeile(lbl("λ / η","lambdaEta") + " / " + lbl("ε<sub>cu2</sub>","epsCu2"), `${fmt(r.lambda)} / ${fmt(r.eta)} / ${fmt(r.epsCu2, 1)}`, "– / – / ‰");
+    h += zeile(lbl("Nutzhöhe d","d"), fmt(r.d / 10, 1), "cm");
+    h += zeile(lbl("Druckzonenhöhe x","x"), fmt(r.x / 10, 1), "cm");
+    h += zeile(lbl("ξ = x/d","xi"), `${fmt(r.xi, 3)} (≤ ${fmt(r.xiLim, 2)})`, haken(r.xiOk));
+    h += zeile(lbl("A<sub>s1</sub> erforderlich","As1erf"), fmt(r.As1erf / 100), "cm²");
+    h += zeile(lbl("A<sub>s,min</sub>","Asmin"), fmt(r.AsMin / 100), "cm²");
+    h += zeile(lbl("<b>A<sub>s1</sub> maßgebend</b>","As1"), `<b>${fmt(r.As1 / 100)}</b>`, "cm²");
+    if (r.As2 > 0) h += zeile(lbl("<b>A<sub>s2</sub> (Druckbewehrung)</b>","As2"), `<b>${fmt(r.As2 / 100)}</b>`, "cm²");
+    h += zeile(lbl("A<sub>s,max</sub> = 0,04·A<sub>c</sub>","Asmax"), fmt(r.AsMax / 100), haken(r.AsMaxOk) + " cm²");
     h += "</table>";
 
     // Dehnungsebene über die relevanten Ebenen
@@ -490,14 +493,14 @@ class StahlbetonTab {
       const bereich = dn.bereich === 2
         ? `Bereich 2: Stahldehnung auf ε<sub>ud</sub> = ${fmt(dn.epsUd, 1)} ‰ begrenzt`
         : `Bereich 3: Betonstauchung ε<sub>cu2</sub> = ${fmt(r.epsCu2, 1)} ‰ maßgebend`;
-      h += `<p><b>Dehnungsebene</b> – ${bereich}</p>`;
+      h += `<p><b>Dehnungsebene</b> ${infoBtn("dehnung")} – ${bereich}</p>`;
       h += "<table><tr><th>Ebene</th><th>Abstand Druckrand [cm]</th><th>ε [‰]</th></tr>";
       for (const e of dn.ebenen) h += `<tr><td>${e.name}</td><td>${fmt(e.z / 10, 1)}</td><td>${fmt(e.eps, 2)}</td></tr>`;
       h += "</table>";
-      h += `<p>ε<sub>yd</sub> = ${fmt(dn.epsYd, 2)} ‰ → Zugbewehrung ${dn.fliesst ? "fließt" : "fließt nicht"} ${haken(dn.fliesst)}</p>`;
+      h += `<p>ε<sub>yd</sub> ${infoBtn("epsYd")} = ${fmt(dn.epsYd, 2)} ‰ → Zugbewehrung ${dn.fliesst ? "fließt" : "fließt nicht"} ${haken(dn.fliesst)}</p>`;
     }
 
-    h += "<p><b>Bewehrungsvorschlag A<sub>s1</sub></b></p><table><tr><th>Ø [mm]</th><th>Anzahl</th><th>A<sub>s,vorh</sub> [cm²]</th></tr>";
+    h += `<p><b>Bewehrungsvorschlag A<sub>s1</sub></b> ${infoBtn("bewehrung")}</p>` + "<table><tr><th>Ø [mm]</th><th>Anzahl</th><th>A<sub>s,vorh</sub> [cm²]</th></tr>";
     for (const v of Biegebemessung.vorschlag(r.As1)) h += `<tr><td>Ø ${v.dm}</td><td>${v.n}</td><td>${fmt(v.As / 100)}</td></tr>`;
     h += "</table>";
 
@@ -508,23 +511,67 @@ class StahlbetonTab {
 
 /* ======================= Start ======================= */
 
+/** Bereiche der App: welcher Tab zuerst geöffnet wird (die Tab-Zuordnung steht im HTML: data-bereich). */
+const BEREICHE = {
+  stahlbau: { titel: "Stahlbau", start: "tragf" },
+  massivbau: { titel: "Massivbau", start: "stahlbeton" },
+};
+
 class App {
   constructor() {
     this.spannung = new SpannungsTab();
     this.werte = new QuerschnittswerteTab();
     this.tragf = new TragfaehigkeitTab();
     this.stahlbeton = new StahlbetonTab();
-    document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => this.wechsle(btn.dataset.tab)));
+    this.info = new InfoPanel();
+    this.bereich = null;
+
+    document.querySelectorAll(".tab").forEach(btn =>
+      btn.addEventListener("click", () => this.wechsle(btn.dataset.tab)));
+    // Navigation über die Adresse (#start, #stahlbau, #massivbau): funktioniert mit Zurück-Taste
+    window.addEventListener("hashchange", () => this.ausAdresse());
+    this.ausAdresse();
+  }
+
+  /** Bereich aus dem URL-Fragment lesen und anzeigen (Standard: Startseite). */
+  ausAdresse() {
+    const name = location.hash.replace("#", "");
+    if (BEREICHE[name]) this.oeffneBereich(name); else this.zeigeStart();
+  }
+
+  zeigeStart() {
+    this.bereich = null;
+    document.getElementById("nav").hidden = true;
+    this.zeigeSektion("start");
+    document.title = "Statik-Rechner";
+  }
+
+  /** Bereich öffnen: passende Tabs einblenden; den aktuellen Tab behalten, wenn er im Bereich vorkommt. */
+  oeffneBereich(name) {
+    const wechselt = this.bereich !== name;
+    this.bereich = name;
+    document.getElementById("nav").hidden = false;
+    document.querySelectorAll(".tab").forEach(b => { b.hidden = !b.dataset.bereich.split(" ").includes(name); });
+    document.title = `${BEREICHE[name].titel} – Statik-Rechner`;
+    const aktuell = this.aktuellerTab;
+    const passt = aktuell && !document.querySelector(`.tab[data-tab="${aktuell}"]`).hidden;
+    this.wechsle(wechselt || !passt ? BEREICHE[name].start : aktuell);
   }
 
   /** Tab umschalten und sichtbare Zeichenflächen neu zeichnen. */
   wechsle(name) {
+    this.aktuellerTab = name;
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("aktiv", b.dataset.tab === name));
-    document.querySelectorAll(".tab-inhalt").forEach(s => s.classList.toggle("aktiv", s.id === "tab-" + name));
+    this.zeigeSektion(name);
     if (name === "spannung") this.spannung.ansicht.zeichne();
     else if (name === "werte") this.werte.aktualisiere();
     else if (name === "tragf") this.tragf.aktualisiere();
-    else this.stahlbeton.aktualisiere();
+    else if (name === "stahlbeton") this.stahlbeton.aktualisiere();
+  }
+
+  zeigeSektion(name) {
+    document.querySelectorAll(".tab-inhalt").forEach(s => s.classList.toggle("aktiv", s.id === "tab-" + name));
+    window.scrollTo(0, 0);
   }
 }
 
