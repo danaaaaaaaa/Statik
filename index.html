@@ -63,6 +63,13 @@
           M<sub>z</sub> &gt; 0: Zug rechts. V<sub>z</sub> wirkt parallel zum Steg, V<sub>y</sub> parallel zu den Flanschen
           (nur der Betrag geht in die Nachweise ein).</p>
 
+        <h2>Berechnungsart <button type="button" class="info" data-info="berechnungsart">i</button></h2>
+        <div class="knoepfe" id="st-modus">
+          <button class="knopf aktiv" data-modus="ee">Elastisch (E-E)</button>
+          <button class="knopf" data-modus="ep">Plastisch (E-P)</button>
+        </div>
+        <p class="hinweis" id="st-modus-hinweis"></p>
+
         <h2>Punkte</h2>
         <div class="raster">
           <label><span>y [mm]</span><input type="number" id="pt-y" value="0" step="any"></label>
@@ -91,10 +98,14 @@
           </div>
         </div>
 
+        <!-- Querschnittsklassifizierung direkt nach den Querschnittswerten -->
+        <h2>Querschnittsklassifizierung <button type="button" class="info" data-info="klasse">i</button></h2>
+        <div id="kl-ergebnis" class="ergebnis"></div>
+
         <!-- darunter: Spannungen und Tragfähigkeit -->
         <div class="zweispaltig">
           <div>
-            <h2>Spannungen (elastisch, E-E)</h2>
+            <h2 id="sp-titel">Spannungen (elastisch, E-E)</h2>
             <div id="sp-nachweis" class="kennwerte"></div>
             <div class="knoepfe">
               <button class="knopf feld aktiv" data-feld="sigma" title="Normalspannung">σ</button>
@@ -168,6 +179,7 @@
   <script src="querschnitte.js"></script>
   <script src="profile.js"></script>
   <script src="spannung.js"></script>
+  <script src="elastoplastisch.js"></script>
   <script src="tragfaehigkeit.js"></script>
   <script src="ansicht3d.js"></script>
   <script src="stahlbeton.js"></script>

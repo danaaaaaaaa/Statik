@@ -97,6 +97,24 @@ class Geometrie {
   }
 
   /**
+   * Beschneidet ein Polygon auf den Bereich  c0 + cy·y + cz·z <= 0  (beliebig gerichtete Gerade).
+   * Wird für die elasto-plastische Spannungsverteilung benötigt (Zonen elastisch / plastisch).
+   */
+  static beschneideEbene(p, c0, cy, cz) {
+    const out = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      const fa = c0 + cy * a.y + cz * a.z, fb = c0 + cy * b.y + cz * b.z;
+      if (fa <= 0) out.push(a);
+      if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) {
+        const t = fa / (fa - fb);
+        out.push({ y: a.y + t * (b.y - a.y), z: a.z + t * (b.z - a.z) });
+      }
+    }
+    return out;
+  }
+
+  /**
    * Anteil des Polygons mit Koordinate < g (achse = 'z': oberhalb einer waagerechten Linie,
    * achse = 'y': links einer senkrechten Linie).
    * @returns {{A:number, S:number}} Fläche A und statisches Moment S = ∫ (g - Koordinate) dA bezogen auf g
@@ -491,6 +509,14 @@ class Querschnitt {
       for (const p of t.randpunkte(n)) out.push({ y: p.y - this.ys, z: p.z - this.zs });
     }
     return out;
+  }
+
+  /** Materialpolygone mit Vorzeichen (+1 Material, −1 Aussparung) in Schwerpunktkoordinaten. */
+  materialpolygone() {
+    return this.teile.map(t => ({
+      vz: t.vz,
+      p: t.randpunkte(360).map(p => ({ y: p.y - this.ys, z: p.z - this.zs })),
+    }));
   }
 
   /** Raster aus Zellen innerhalb des Querschnitts (für die farbige Darstellung). */

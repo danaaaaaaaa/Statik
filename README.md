@@ -49,3 +49,10 @@ unter gleichem Namen erneut hochladen. Danach 1–2 Minuten warten und die Seite
 - Vereinfachungen: Jourawski ist eine Näherung (keine Torsion, kein Schubmittelpunkt); M_N,V = M_N·M_V/M_pl; für allgemeine Querschnitte α = β = 1. Eurocode-Gleichungsnummern beziehen sich auf die 1. Generation und sind zu prüfen.
 
 **Massivbau:** Betonarbeitslinie wählbar (Parabel-Rechteck-Diagramm oder Spannungsblock); der Spannungsverlauf zeigt das Parabel-Rechteck-Diagramm, der Block gestrichelt zum Vergleich.
+
+## Version 4 – E-P-Spannungen, Klassifizierung, Schalter
+- **elastoplastisch.js (neu):** Klasse `ElastoPlastischeSpannung` – nichtlineare Spannungsverteilung (σ = E·ε, begrenzt auf ±f_yd) bis zum voll durchplastizierten Querschnitt, für beliebige Querschnitte inkl. Polygone (exaktes Beschneiden der Polygone, Newton-Verfahren für die Dehnungsebene). Gleiche Schnittstelle wie `Spannung`, daher nutzt die 3D-Ansicht beide.
+- **Schalter „Berechnungsart":** E-E (linear) oder E-P. E-P ist bei Klasse 3/4 oder unbekannter Klasse gesperrt. Maßgebend ist die Klasse der tatsächlich vorhandenen Beanspruchung (Druck, M_y, M_z).
+- **Querschnittsklassifizierung** steht jetzt direkt unter den Querschnittswerten.
+- Im E-P-Modus entfallen σ_v-Darstellung und -Nachweis; der Nachweis ist die E-P-Interaktion. Übersteigt die Beanspruchung die Traglast, wird der Grenzzustand beim größten erreichbaren Lastanteil gezeigt.
+- Einschränkung: Der E-P-Spannungszustand berücksichtigt N, M_y, M_z; τ bleibt elastisch (Jourawski), der Querkrafteinfluss steckt im Nachweis (M_V,Rd).

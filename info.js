@@ -239,6 +239,19 @@ const INFO = {
       "Der Größtwert wird über Rand- und Innenpunkte gesucht (häufig am Übergang Steg/Flansch).",
     normen: [`${EC3}, 6.2.1(5), Gl. (6.1)`],
   },
+  berechnungsart: {
+    titel: "Berechnungsart E-E / E-P",
+    formeln: [
+      "E-E: σ = N/A + M<sub>y</sub>/I<sub>y</sub>·z + M<sub>z</sub>/I<sub>z</sub>·y &nbsp;(linear), Nachweis σ<sub>v</sub> ≤ f<sub>yd</sub>",
+      "E-P: σ = E·ε, begrenzt auf ±f<sub>yd</sub> &nbsp;(Dehnungsebene, Gleichgewicht mit N, M<sub>y</sub>, M<sub>z</sub>)",
+    ],
+    text: "E-E (elastisch-elastisch): linearer Spannungsverlauf, die Randspannung darf f<sub>yd</sub> nicht überschreiten. " +
+      "E-P (elastisch-plastisch): der Querschnitt darf teilweise bis voll durchplastizieren; dargestellt wird der nichtlineare Spannungszustand " +
+      "(Fließzonen bei σ = ±f<sub>yd</sub>). E-P ist nur für Querschnitte der Klasse 1 und 2 möglich; bei Klasse 3 und 4 ist der Schalter gesperrt. " +
+      "Der dargestellte E-P-Spannungszustand gilt für N, M<sub>y</sub>, M<sub>z</sub>; der Einfluss der Querkraft steckt im Nachweis (M<sub>V,Rd</sub>). " +
+      "Die Schubspannung τ wird weiterhin elastisch nach Jourawski berechnet.",
+    normen: [`${EC3}, 5.4.3 (Plastisches Verfahren)`, `${EC3}, 5.5 (Klassifizierung)`, `${EC3}, 6.2.1 bis 6.2.10`],
+  },
   epNachweis: {
     titel: "Plastischer Nachweis (Verfahren E-P)",
     formeln: [

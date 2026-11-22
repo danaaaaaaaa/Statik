@@ -215,12 +215,31 @@ class QuerschnittswerteAnzeige {
   }
 }
 
+/* ======================= Anzeige: Querschnittsklassifizierung ======================= */
+
+class KlassifizierungAnzeige {
+  /** @param r Ergebnis von Stahlbemessung.berechne(), @param ep Ergebnis von PlastischerNachweis.berechne() */
+  static html(r, ep) {
+    if (!r.klassen) return '<p class="hinweis">Für diese Querschnittsform ist keine Klassifizierung hinterlegt (E-P nicht möglich).</p>';
+    let h = "<ul>";
+    for (const [name, k] of [["Biegung y–y", r.klassen.biegungY], ["Biegung z–z", r.klassen.biegungZ], ["Druck", r.klassen.druck]]) {
+      const teile = k.teile.map(t => `${t.name} c/t = ${fmt(t.ct, 1)} (Kl. ${t.klasse})`).join(", ");
+      h += `<li>${name}: <b>Klasse ${k.klasse}</b>${teile ? " – " + teile : ""}${k.hinweis ? " – " + k.hinweis : ""}</li>`;
+    }
+    h += "</ul>";
+    const kl = ep.klasseMax;
+    h += `<p><b>Maßgebende Klasse für die vorhandene Beanspruchung: ${kl}</b> – ` +
+      (kl <= 2 ? '<span class="ok">plastische Bemessung (E-P) möglich</span>' : '<span class="fehler">nur elastische Bemessung (E-E)</span>') + "</p>";
+    if (kl === 4) h += '<p class="hinweis">Klasse 4: Beulen (wirksamer Querschnitt) wird nicht berechnet.</p>';
+    return h;
+  }
+}
+
 /* ======================= Anzeige: Tragfähigkeit (Stahl) ======================= */
 
 class TragfaehigkeitAnzeige {
-  /** Ergebnisse als HTML. @param ep Ergebnis von PlastischerNachweis.berechne() */
-  static html(q, r, ep) {
-    const kl = k => (k === null ? "–" : k);
+  /** Ergebnisse als HTML. @param ep Ergebnis von PlastischerNachweis.berechne(), @param {boolean} plastisch E-P-Nachweis anzeigen */
+  static html(q, r, ep, plastisch) {
     const zOS = (v, d) => (v === null ? "–" : fmt(v, d));
     const haken = ok => ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>';
 
@@ -230,7 +249,6 @@ class TragfaehigkeitAnzeige {
     h += "</table>";
 
     h += "<p><b>Querschnittswiderstände</b></p><table><tr><th></th><th>y–y</th><th>z–z</th><th></th></tr>";
-    h += zeileN(lbl("Klasse (Biegung)", "klasse"), kl(r.y.klasse), kl(r.z.klasse), "");
     h += zeileN(lbl("M<sub>el,Rd</sub>", "Mel"), fmt(r.y.Mel, 1), fmt(r.z.Mel, 1), "kNm");
     h += zeileN(lbl("M<sub>pl,Rd</sub>", "Mpl"), fmt(r.y.Mpl, 1), fmt(r.z.Mpl, 1), "kNm");
     h += zeileN(lbl("<b>M<sub>c,Rd</sub></b>", "Mc"), `<b>${zOS(r.y.Mc, 1)}</b>`, `<b>${zOS(r.z.Mc, 1)}</b>`, "kNm");
@@ -238,12 +256,12 @@ class TragfaehigkeitAnzeige {
     h += zeileN(lbl("<b>V<sub>pl,Rd</sub></b>", "Vpl"), `<b>${zOS(r.Vz, 1)}</b>`, `<b>${zOS(r.Vy, 1)}</b>`, "kN");
     h += "</table>";
     h += "<table>";
-    h += zeile(lbl("Klasse (Druck)", "klasse"), kl(r.klasseDruck), "");
     h += zeile(lbl("N<sub>pl,Rd</sub>", "Npl"), fmt(r.Npl, 1), "kN");
     h += "</table>";
     h += '<p class="hinweis">V<sub>pl,Rd</sub> in der Spalte y–y gilt für V<sub>z</sub> (parallel zum Steg), in der Spalte z–z für V<sub>y</sub>.</p>';
 
-    // ---- Plastischer Nachweis E-P ----
+    // ---- Plastischer Nachweis E-P (nur im Modus E-P) ----
+    if (plastisch) {
     h += `<h3>Plastischer Nachweis E-P ${infoBtn("epNachweis")}</h3>`;
     if (ep.zulaessig === false) {
       h += `<p class="fehler">Querschnittsklasse ${ep.klasseMax}: plastische Nachweise sind nur für Klasse 1 und 2 zulässig. Die Werte dienen nur der Orientierung, maßgebend ist der elastische Nachweis (Vergleichsspannung).</p>`;
@@ -265,24 +283,14 @@ class TragfaehigkeitAnzeige {
     h += `<p>Interaktion ${infoBtn("interaktion")} (α = ${fmt(ep.alpha, 2)}, β = ${fmt(ep.beta, 2)}): <b>${eta}</b><br>` +
          `<b>Ausnutzung E-P = ${Number.isFinite(ep.etaMax) ? fmt(ep.etaMax * 100, 1) + " %" : "∞"}</b> ${haken(ok)}` +
          `<div class="balken"><i class="${ok ? "" : "zu-viel"}" style="width:${Math.min(100, ep.etaMax * 100) || 0}%"></i></div></p>`;
-
-    // Klassifizierung im Detail
-    if (r.klassen) {
-      h += `<p><b>Querschnittsklassen</b> ${infoBtn("klasse")}</p><ul>`;
-      for (const [name, k] of [["Biegung y–y", r.klassen.biegungY], ["Biegung z–z", r.klassen.biegungZ], ["Druck", r.klassen.druck]]) {
-        const teile = k.teile.map(t => `${t.name} c/t = ${fmt(t.ct, 1)} (Kl. ${t.klasse})`).join(", ");
-        h += `<li>${name}: <b>Klasse ${k.klasse}</b>${teile ? " – " + teile : ""}${k.hinweis ? " – " + k.hinweis : ""}</li>`;
-      }
-      h += "</ul>";
     }
 
     // Hinweise
     const hinweise = [];
     if (!r.klassen) hinweise.push("Querschnittsklasse für diese Form nicht ermittelt: M<sub>c,Rd</sub> nicht angegeben.");
-    if ([r.y.klasse, r.z.klasse, r.klasseDruck].includes(4)) hinweise.push("Klasse 4: Beulen (wirksamer Querschnitt) wird nicht berechnet.");
     if (q.unsymmetrisch) hinweise.push("Unsymmetrischer Querschnitt: Die Tragfähigkeiten gelten für die Achsen y und z, nicht für die Hauptachsen.");
     if (r.Av && r.Av.hinweis) hinweise.push(r.Av.hinweis);
-    hinweise.push(`Interaktion: ${ep.bem}.`);
+    if (plastisch) hinweise.push(`Interaktion: ${ep.bem}.`);
     h += "<ul>" + hinweise.map(t => `<li>${t}</li>`).join("") + "</ul>";
     return h;
   }
@@ -309,27 +317,38 @@ class SpannungsAnzeige {
       this.ansicht.setzeAnsicht(az, el);
     }));
     document.querySelectorAll("[data-feld]").forEach(btn => btn.addEventListener("click", () => {
-      this.feld = btn.dataset.feld;
-      document.querySelectorAll("[data-feld]").forEach(b => b.classList.toggle("aktiv", b === btn));
+      this._setzeFeld(btn.dataset.feld);
       this.neuZeichnen();
     }));
     document.getElementById("zoom-plus").addEventListener("click", () => this.ansicht.zoomen(1.25));
     document.getElementById("zoom-minus").addEventListener("click", () => this.ansicht.zoomen(1 / 1.25));
   }
 
-  /** Alles mit neuen Daten anzeigen. @param {number} fyd Bemessungsstreckgrenze [N/mm²] */
+  /**
+   * Alles mit neuen Daten anzeigen.
+   * @param sp Spannung (E-E, linear) oder ElastoPlastischeSpannung (E-P, nichtlinear) - beide haben dieselbe Schnittstelle
+   * @param {number} fyd Bemessungsstreckgrenze [N/mm²]
+   */
   zeige(q, sp, schub, fyd) {
-    this.letzte = {
-      q, sp, schub, fyd,
-      felder: { sigma: new Spannungsfeld(sp, schub, "sigma"), tau: new Spannungsfeld(sp, schub, "tau"), v: new Spannungsfeld(sp, schub, "v") },
-    };
+    const plastisch = sp instanceof ElastoPlastischeSpannung;
+    const felder = { sigma: new Spannungsfeld(sp, schub, "sigma"), tau: new Spannungsfeld(sp, schub, "tau") };
+    if (!plastisch) felder.v = new Spannungsfeld(sp, schub, "v");      // σ_v nur für den elastischen Nachweis
+    if (plastisch && this.feld === "v") this._setzeFeld("sigma");
+    document.querySelector('[data-feld="v"]').style.display = plastisch ? "none" : "";
+    this.letzte = { q, sp, schub, fyd, felder, plastisch };
     this.neuZeichnen();
+  }
+
+  /** Dargestelltes Feld wählen und Knöpfe markieren. */
+  _setzeFeld(f) {
+    this.feld = f;
+    document.querySelectorAll("[data-feld]").forEach(b => b.classList.toggle("aktiv", b.dataset.feld === f));
   }
 
   neuZeichnen() {
     if (!this.letzte) return;
-    const { q, sp, schub, fyd, felder } = this.letzte;
-    this.nachweis(felder, fyd);
+    const { q, sp, schub, fyd, felder, plastisch } = this.letzte;
+    if (plastisch) this.nachweisEP(sp, felder, fyd); else this.nachweis(felder, fyd);
     this.zeigePunkte(q, felder.sigma, schub);
     const grenze = this.feld === "tau" ? fyd / Math.sqrt(3) : fyd;
     this.ansicht.setzeDaten(q, felder[this.feld], this.punkte, grenze);
@@ -351,9 +370,23 @@ class SpannungsAnzeige {
       `<span class="hinweis">Nulllinie ${infoBtn("nulllinie")}</span>`;
   }
 
+  /** Zustandsanzeige für E-P: Zustand, Fließanteil, Extremwerte (Nachweis selbst: siehe Tragfähigkeit). */
+  nachweisEP(sp, felder, fyd) {
+    const es = felder.sigma.extremwerte(), et = felder.tau.extremwerte();
+    const eps = sp.epsMax > 100 ? "> 100" : fmt(sp.epsMax, 2);
+    let h = `${nb(`f<sub>yd</sub> = <b>${fmt(fyd, 1)}</b> N/mm²`)} ${infoBtn("berechnungsart")}<br>` +
+      `Zustand: <b>${sp.zustand}</b> (${fmt(sp.plastAnteil * 100, 1)} % der Fläche fließen)<br>` +
+      `${nb(`σ<sub>max</sub> = <b>${fmt(es.max.wert)}</b>`)} ${nb(`σ<sub>min</sub> = <b>${fmt(es.min.wert)}</b> N/mm²`)}<br>` +
+      `${nb(`ε<sub>max</sub>/ε<sub>y</sub> = <b>${eps}</b>`)} (größte Randdehnung)<br>` +
+      `${nb(`τ<sub>max</sub> = <b>${fmt(et.max.wert)}</b> N/mm²`)} ${infoBtn("tau")} (elastisch)<br>` +
+      `<span class="hinweis">Dehnungsnulllinie ${infoBtn("nulllinie")}</span>`;
+    if (sp.ueberlast) h += `<br><span class="fehler">Die Beanspruchung (N, M) übersteigt die Traglast des Querschnitts. Dargestellt ist der Grenzzustand bei ${fmt(sp.lambda * 100, 1)} % der Beanspruchung.</span>`;
+    document.getElementById("sp-nachweis").innerHTML = h;
+  }
+
   /** Punkttabelle mit σ, τ und σ_v füllen. */
   zeigePunkte(q, feldSigma, schub) {
-    const sp = feldSigma.sp;
+    const sp = feldSigma.sp, plastisch = sp instanceof ElastoPlastischeSpannung;
     const tb = document.querySelector("#pt-tabelle tbody");
     let ausserhalb = false;
     tb.innerHTML = this.punkte.map((p, i) => {
@@ -361,7 +394,7 @@ class SpannungsAnzeige {
       ausserhalb = ausserhalb || aussen;
       const sig = sp.sigma(p.y, p.z), tau = schub.tau(p.y, p.z).t;
       return `<tr><td>P${i + 1}${aussen ? " *" : ""}</td><td>${fmt(p.y, 1)}</td><td>${fmt(p.z, 1)}</td>` +
-             `<td>${fmt(sig, 1)}</td><td>${fmt(tau, 1)}</td><td>${fmt(Math.sqrt(sig * sig + 3 * tau * tau), 1)}</td>` +
+             `<td>${fmt(sig, 1)}</td><td>${fmt(tau, 1)}</td><td>${plastisch ? "–" : fmt(Math.sqrt(sig * sig + 3 * tau * tau), 1)}</td>` +
              `<td><button data-loesche="${i}" title="Löschen">✕</button></td></tr>`;
     }).join("");
     document.getElementById("pt-hinweis").textContent = ausserhalb
@@ -383,6 +416,11 @@ class StahlbauSeite {
     STAHLGUETEN.forEach(([name]) => sel.add(new Option(name, name)));
     sel.value = "S355";
     sel.addEventListener("change", () => this.aktualisiere());
+    this.plastischGewuenscht = false;                    // Schalter E-E / E-P
+    document.querySelectorAll("[data-modus]").forEach(b => b.addEventListener("click", () => {
+      this.plastischGewuenscht = b.dataset.modus === "ep";
+      this.aktualisiere();
+    }));
     for (const id of ["st-gm0", "in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"]) {
       document.getElementById(id).addEventListener("input", () => this.aktualisiere());
     }
@@ -405,13 +443,32 @@ class StahlbauSeite {
 
     const r = new Stahlbemessung(q, fy, gm0).berechne();
     const ep = new PlastischerNachweis(q, fy, gm0, r).berechne(N, Vy, Vz, My, Mz);
-    const sp = new Spannung(q, N, My, Mz);
     const schub = new Schubspannung(q, Vy, Vz);
 
+    // E-P nur bei Klasse 1/2 möglich; sonst ist der Schalter gesperrt und es wird elastisch gerechnet
+    const moeglich = ep.zulaessig === true;
+    const plastisch = moeglich && this.plastischGewuenscht;
+    this._modusAnzeige(moeglich, plastisch, ep);
+    const sp = plastisch ? new ElastoPlastischeSpannung(q, N, My, Mz, fy / gm0) : new Spannung(q, N, My, Mz);
+
     document.getElementById("qw-tabelle").innerHTML = QuerschnittswerteAnzeige.html(q);
-    document.getElementById("tf-ergebnis").innerHTML = TragfaehigkeitAnzeige.html(q, r, ep);
+    document.getElementById("kl-ergebnis").innerHTML = KlassifizierungAnzeige.html(r, ep);
+    document.getElementById("tf-ergebnis").innerHTML = TragfaehigkeitAnzeige.html(q, r, ep, plastisch);
+    document.getElementById("sp-titel").textContent = plastisch ? "Spannungen (elastisch-plastisch, E-P)" : "Spannungen (elastisch, E-E)";
     this.spannung.zeige(q, sp, schub, fy / gm0);
     this.skizze.zeichne(q, { pna: { y: r.z.lage, z: r.y.lage } });
+  }
+
+  /** Schalter E-E / E-P aktualisieren: E-P ist bei Klasse 3/4 oder unbekannter Klasse gesperrt. */
+  _modusAnzeige(moeglich, plastisch, ep) {
+    const knopfEP = document.querySelector('[data-modus="ep"]');
+    knopfEP.disabled = !moeglich;
+    document.querySelector('[data-modus="ee"]').classList.toggle("aktiv", !plastisch);
+    knopfEP.classList.toggle("aktiv", plastisch);
+    document.getElementById("st-modus-hinweis").textContent =
+      ep.zulaessig === true ? (plastisch ? "Plastisch: Fließzonen und Durchplastizieren werden berücksichtigt." : "Elastisch gerechnet (E-P wäre möglich: Klasse " + ep.klasseMax + ").")
+      : ep.zulaessig === false ? "E-P gesperrt: Querschnittsklasse " + ep.klasseMax + " (nur Klasse 1 und 2 zulässig)."
+      : "E-P gesperrt: Querschnittsklasse nicht ermittelt.";
   }
 
   /** Beim Einblenden der Seite neu zeichnen (Zeichenflächen haben zuvor keine Größe). */

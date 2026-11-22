@@ -148,7 +148,15 @@ class PlastischerNachweis {
 
     // Gültigkeit: plastische Nachweise nur für Klasse 1 und 2
     let klasseMax = null;
-    if (r.klassen) klasseMax = Math.max(r.klassen.biegungY.klasse, r.klassen.biegungZ.klasse, r.klassen.druck.klasse);
+    // maßgebend ist nur die Klasse der tatsächlich vorhandenen Beanspruchung (Druck, Biegung y, Biegung z)
+    if (r.klassen) {
+      const ks = [];
+      if (N < 0) ks.push(r.klassen.druck.klasse);
+      if (My !== 0) ks.push(r.klassen.biegungY.klasse);
+      if (Mz !== 0) ks.push(r.klassen.biegungZ.klasse);
+      if (!ks.length) ks.push(r.klassen.biegungY.klasse, r.klassen.biegungZ.klasse);
+      klasseMax = Math.max(...ks);
+    }
     return {
       n, art, y, z, alpha, beta, bem, eta, klasseMax,
       zulaessig: klasseMax === null ? null : klasseMax <= 2,
