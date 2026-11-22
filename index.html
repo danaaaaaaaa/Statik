@@ -50,17 +50,18 @@
           <label><span>Stahlgüte f<sub>y</sub> <button type="button" class="info" data-info="fy">i</button></span><select id="st-guete"></select></label>
           <label><span>γ<sub>M0</sub> [–] <button type="button" class="info" data-info="gammaM0">i</button></span><input type="number" id="st-gm0" value="1" step="any"></label>
         </div>
-        <p class="hinweis">f<sub>y</sub> gilt für Blechdicken t ≤ 40 mm (EN 10025). γ<sub>M0</sub> = 1,0 nach NA (DE).</p>
 
         <h2>Schnittgrößen <button type="button" class="info" data-info="sigma">i</button></h2>
-        <div class="raster">
-          <label><span>N [kN] (Zug +)</span><input type="number" id="in-N" value="0" step="any"></label>
+        <div class="raster raster3">
+          <label><span>N [kN]</span><input type="number" id="in-N" value="0" step="any"></label>
+          <label><span>V<sub>y</sub> [kN]</span><input type="number" id="in-Vy" value="0" step="any"></label>
+          <label><span>V<sub>z</sub> [kN]</span><input type="number" id="in-Vz" value="100" step="any"></label>
           <label><span>M<sub>y</sub> [kNm]</span><input type="number" id="in-My" value="50" step="any"></label>
-          <label><span>M<sub>z</sub> [kNm]</span><input type="number" id="in-Mz" value="10" step="any"></label>
+          <label><span>M<sub>z</sub> [kNm]</span><input type="number" id="in-Mz" value="0" step="any"></label>
         </div>
-        <p class="hinweis">Koordinaten im Schwerpunkt, y nach rechts, z nach unten.
-          M<sub>y</sub> &gt; 0: Zug unten (z &gt; 0). M<sub>z</sub> &gt; 0: Zug rechts (y &gt; 0).
-          Spannungen: Zug +, Druck −.</p>
+        <p class="hinweis">y nach rechts, z nach unten, Ursprung im Schwerpunkt. N &gt; 0: Zug. M<sub>y</sub> &gt; 0: Zug unten.
+          M<sub>z</sub> &gt; 0: Zug rechts. V<sub>z</sub> wirkt parallel zum Steg, V<sub>y</sub> parallel zu den Flanschen
+          (nur der Betrag geht in die Nachweise ein).</p>
 
         <h2>Punkte</h2>
         <div class="raster">
@@ -69,42 +70,52 @@
         </div>
         <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
         <table id="pt-tabelle">
-          <thead><tr><th>Punkt</th><th>y [mm]</th><th>z [mm]</th><th>σ [N/mm²]</th><th></th></tr></thead>
+          <thead><tr><th>Punkt</th><th>y</th><th>z</th><th>σ</th><th>τ</th><th>σ<sub>v</sub></th><th></th></tr></thead>
           <tbody></tbody>
         </table>
-        <p class="hinweis" id="pt-hinweis"></p>
+        <p class="hinweis" id="pt-hinweis">Koordinaten in mm, Spannungen in N/mm².</p>
       </div>
 
       <div class="ergebnisse">
-        <h2>Spannungen im Vergleich zur Streckgrenze</h2>
-        <div id="sp-nachweis" class="kennwerte"></div>
-        <div class="knoepfe">
-          <button class="knopf" data-ansicht="-35,25">3D</button>
-          <button class="knopf" data-ansicht="0,0">Vorne</button>
-          <button class="knopf" data-ansicht="90,0">Seite</button>
-          <button class="knopf" data-ansicht="0,89">Oben</button>
-          <button class="knopf" id="zoom-plus">＋</button>
-          <button class="knopf" id="zoom-minus">−</button>
-        </div>
-        <canvas id="canvas3d"></canvas>
-        <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Grau: Querschnitt, farbig: Spannungsfläche
-          (volle Farbe = f<sub>yd</sub>), orange gestrichelt: ±f<sub>yd</sub>, grün gestrichelt: Nulllinie.</p>
-
+        <!-- oben: Querschnittswerte neben der Skizze -->
         <div class="zweispaltig">
           <div>
             <h2>Querschnittswerte</h2>
             <div id="qw-tabelle" class="ergebnis"></div>
+          </div>
+          <div class="skizzenbox">
+            <h2>Querschnitt</h2>
+            <canvas id="st-skizze" style="height:300px"></canvas>
+            <p class="hinweis">Gestrichelt: Schwerachsen (rot y, blau z). Grün: plastische Nulllinien.
+              Violett punktiert: Hauptachsen (nur bei unsymmetrischen Querschnitten).</p>
+          </div>
+        </div>
+
+        <!-- darunter: Spannungen und Tragfähigkeit -->
+        <div class="zweispaltig">
+          <div>
+            <h2>Spannungen (elastisch, E-E)</h2>
+            <div id="sp-nachweis" class="kennwerte"></div>
+            <div class="knoepfe">
+              <button class="knopf feld aktiv" data-feld="sigma" title="Normalspannung">σ</button>
+              <button class="knopf feld" data-feld="tau" title="Schubspannung">τ</button>
+              <button class="knopf feld" data-feld="v" title="Vergleichsspannung">σ<sub>v</sub></button>
+              <span class="trenner"></span>
+              <button class="knopf" data-ansicht="-35,25">3D</button>
+              <button class="knopf" data-ansicht="0,0">Vorne</button>
+              <button class="knopf" data-ansicht="90,0">Seite</button>
+              <button class="knopf" id="zoom-plus">＋</button>
+              <button class="knopf" id="zoom-minus">−</button>
+            </div>
+            <canvas id="canvas3d"></canvas>
+            <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Volle Farbe = Bezugswert (f<sub>yd</sub>, bei τ f<sub>yd</sub>/√3);
+              orange gestrichelt: Grenzwert, grün gestrichelt: Nulllinie.</p>
           </div>
           <div>
             <h2>Tragfähigkeit</h2>
             <div id="tf-ergebnis" class="ergebnis"></div>
           </div>
         </div>
-
-        <h2>Querschnittsskizze</h2>
-        <canvas id="st-skizze" style="height:320px"></canvas>
-        <p class="hinweis">Gestrichelt: Schwerachsen (rot y, blau z). Grün: plastische Nulllinien (teilen die Fläche in zwei gleich große Hälften).
-          Violett punktiert: Hauptachsen (nur bei unsymmetrischen Querschnitten).</p>
       </div>
     </section>
 
@@ -134,6 +145,8 @@
         <div class="raster">
           <label><span>Beton <button type="button" class="info" data-info="sbBeton">i</button></span><select id="sb-beton"></select></label>
           <label><span>Betonstahl <button type="button" class="info" data-info="sbStahl">i</button></span><select id="sb-stahl"><option>B500B</option></select></label>
+          <label style="grid-column:1 / -1"><span>Betonarbeitslinie <button type="button" class="info" data-info="arbeitslinie">i</button></span>
+            <select id="sb-linie"><option value="pr">Parabel-Rechteck-Diagramm</option><option value="block">Rechteckiger Spannungsblock</option></select></label>
         </div>
 
         <h2>Einwirkung</h2>
@@ -142,9 +155,9 @@
 
       <div class="ergebnisse">
         <canvas id="sb-skizze" style="height:260px"></canvas>
-        <p class="hinweis">Links: Querschnitt mit Druckzone (blau, Spannungsblock λ·x), Dehnungsnulllinie x
-          (gestrichelt), Zugbewehrung (rot) und Druckbewehrung (dunkelblau).
-          Mitte: Dehnungsebene, rechts: Spannungsverlauf (Druck links, Zug rechts).</p>
+        <p class="hinweis">Links: Querschnitt mit Druckzone (blau), Dehnungsnulllinie x (gestrichelt), Zugbewehrung (rot)
+          und Druckbewehrung (dunkelblau). Mitte: Dehnungsebene, rechts: Spannungsverlauf mit Parabel-Rechteck-Diagramm
+          (gestrichelt: Spannungsblock zum Vergleich), Druck links, Zug rechts.</p>
         <div id="sb-ergebnis" class="ergebnis"></div>
       </div>
     </section>

@@ -175,6 +175,7 @@ class QSkizze {
 
 /* ======================= Anzeige: Querschnittswerte ======================= */
 
+/** Rein geometrische Werte. Elastische und plastische Widerstandsmomente stehen nur hier (nicht noch einmal bei der Tragfähigkeit). */
 class QuerschnittswerteAnzeige {
   /** HTML-Tabelle aller Querschnittswerte. */
   static html(q) {
@@ -195,15 +196,20 @@ class QuerschnittswerteAnzeige {
       h += zeile("α (Hauptachse 1 gegen y)", fmt(q.alphaHaupt * 180 / Math.PI, 2), "°");
     }
     h += zeile(lbl("I<sub>p</sub> = I<sub>y</sub> + I<sub>z</sub>", "Ip"), fmt(q.Ip / 1e4, 1), "cm⁴");
-    h += zeile(lbl("<b>W<sub>y,o</sub></b> (oben)", "Wyo"), `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("<b>W<sub>y,u</sub></b> (unten)", "Wyu"), `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("<b>W<sub>z</sub></b>", "Wz"), `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>W<sub>el,y,o</sub></b> (oben)", "Wyo"), `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>W<sub>el,y,u</sub></b> (unten)", "Wyu"), `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("<b>W<sub>el,z</sub></b>", "Wz"), `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
     h += zeile(lbl("<b>W<sub>pl,y</sub></b>", "Wpl"), `<b>${fmt(q.Wply / 1e3, 2)}</b>`, "cm³");
     h += zeile(lbl("<b>W<sub>pl,z</sub></b>", "Wpl"), `<b>${fmt(q.Wplz / 1e3, 2)}</b>`, "cm³");
+    h += zeile(lbl("α<sub>pl,y</sub> = W<sub>pl,y</sub>/W<sub>el,y</sub>", "alpha"), fmt(q.Wply / q.Wely, 3), "–");
+    h += zeile("α<sub>pl,z</sub> = W<sub>pl,z</sub>/W<sub>el,z</sub>", fmt(q.Wplz / q.Welz, 3), "–");
+    h += zeile(lbl("Lage pl. NL (y–y)", "pna"), fmt(q.plastisch("y").lage, 1), "mm");
+    h += zeile("Lage pl. NL (z–z)", fmt(q.plastisch("z").lage, 1), "mm");
     h += zeile(lbl("i<sub>y</sub>", "iy"), fmt(q.iy / 10, 2), "cm");
     h += zeile(lbl("i<sub>z</sub>", "iz"), fmt(q.iz / 10, 2), "cm");
     h += zeile(lbl("S<sub>y</sub> (obere Hälfte)", "Sy"), fmt(q.Sy / 1e3, 2), "cm³");
     h += "</table>";
+    h += '<p class="hinweis">Lage pl. NL: Abstand der plastischen Nulllinie vom Schwerpunkt (positiv nach unten bzw. rechts).</p>';
     if (q.unsymmetrisch) h += '<p class="hinweis">Unsymmetrischer Querschnitt: y und z sind keine Hauptachsen (I<sub>yz</sub> ≠ 0).</p>';
     return h;
   }
@@ -212,33 +218,53 @@ class QuerschnittswerteAnzeige {
 /* ======================= Anzeige: Tragfähigkeit (Stahl) ======================= */
 
 class TragfaehigkeitAnzeige {
-  /** Ergebnisse als HTML-Tabellen. */
-  static html(q, r) {
+  /** Ergebnisse als HTML. @param ep Ergebnis von PlastischerNachweis.berechne() */
+  static html(q, r, ep) {
     const kl = k => (k === null ? "–" : k);
-    const zahlOderStrich = (v, d) => (v === null ? "–" : fmt(v, d));
+    const zOS = (v, d) => (v === null ? "–" : fmt(v, d));
+    const haken = ok => ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>';
 
     let h = "<table>";
     h += zeile(lbl("f<sub>y</sub>", "fy"), fmt(r.fy, 0), "N/mm²");
     h += zeile(lbl("ε = √(235/f<sub>y</sub>)", "eps"), fmt(r.eps, 3), "–");
     h += "</table>";
 
-    h += "<p><b>Biegung</b></p><table><tr><th></th><th>y–y</th><th>z–z</th><th></th></tr>";
-    h += zeileN(lbl("W<sub>el</sub>", "Wel"), fmt(r.y.Wel / 1e3, 1), fmt(r.z.Wel / 1e3, 1), "cm³");
-    h += zeileN(lbl("W<sub>pl</sub>", "Wpl"), fmt(r.y.Wpl / 1e3, 1), fmt(r.z.Wpl / 1e3, 1), "cm³");
-    h += zeileN(lbl("α<sub>pl</sub>", "alpha"), fmt(r.y.alpha, 3), fmt(r.z.alpha, 3), "–");
-    h += zeileN(lbl("Lage pl. NL*", "pna"), fmt(r.y.lage, 1), fmt(r.z.lage, 1), "mm");
-    h += zeileN(lbl("Klasse", "klasse"), kl(r.y.klasse), kl(r.z.klasse), "");
+    h += "<p><b>Querschnittswiderstände</b></p><table><tr><th></th><th>y–y</th><th>z–z</th><th></th></tr>";
+    h += zeileN(lbl("Klasse (Biegung)", "klasse"), kl(r.y.klasse), kl(r.z.klasse), "");
     h += zeileN(lbl("M<sub>el,Rd</sub>", "Mel"), fmt(r.y.Mel, 1), fmt(r.z.Mel, 1), "kNm");
     h += zeileN(lbl("M<sub>pl,Rd</sub>", "Mpl"), fmt(r.y.Mpl, 1), fmt(r.z.Mpl, 1), "kNm");
-    h += zeileN(lbl("<b>M<sub>c,Rd</sub></b>", "Mc"), `<b>${zahlOderStrich(r.y.Mc, 1)}</b>`, `<b>${zahlOderStrich(r.z.Mc, 1)}</b>`, "kNm");
-    h += "</table><p class=\"hinweis\">* Abstand der plastischen Nulllinie (NL) vom Schwerpunkt.</p>";
-
-    h += "<p><b>Normalkraft und Querkraft</b></p><table><tr><th></th><th>V<sub>z</sub> / Druck</th><th>V<sub>y</sub></th><th></th></tr>";
-    h += zeileN(lbl("Klasse (Druck)", "klasse"), kl(r.klasseDruck), "", "");
-    h += zeileN(lbl("N<sub>pl,Rd</sub>", "Npl"), fmt(r.Npl, 1), "", "kN");
+    h += zeileN(lbl("<b>M<sub>c,Rd</sub></b>", "Mc"), `<b>${zOS(r.y.Mc, 1)}</b>`, `<b>${zOS(r.z.Mc, 1)}</b>`, "kNm");
     h += zeileN(lbl("A<sub>v</sub>", "Av"), r.Av && r.Av.z ? fmt(r.Av.z / 100, 2) : "–", r.Av && r.Av.y ? fmt(r.Av.y / 100, 2) : "–", "cm²");
-    h += zeileN(lbl("<b>V<sub>pl,Rd</sub></b>", "Vpl"), `<b>${zahlOderStrich(r.Vz, 1)}</b>`, `<b>${zahlOderStrich(r.Vy, 1)}</b>`, "kN");
+    h += zeileN(lbl("<b>V<sub>pl,Rd</sub></b>", "Vpl"), `<b>${zOS(r.Vz, 1)}</b>`, `<b>${zOS(r.Vy, 1)}</b>`, "kN");
     h += "</table>";
+    h += "<table>";
+    h += zeile(lbl("Klasse (Druck)", "klasse"), kl(r.klasseDruck), "");
+    h += zeile(lbl("N<sub>pl,Rd</sub>", "Npl"), fmt(r.Npl, 1), "kN");
+    h += "</table>";
+    h += '<p class="hinweis">V<sub>pl,Rd</sub> in der Spalte y–y gilt für V<sub>z</sub> (parallel zum Steg), in der Spalte z–z für V<sub>y</sub>.</p>';
+
+    // ---- Plastischer Nachweis E-P ----
+    h += `<h3>Plastischer Nachweis E-P ${infoBtn("epNachweis")}</h3>`;
+    if (ep.zulaessig === false) {
+      h += `<p class="fehler">Querschnittsklasse ${ep.klasseMax}: plastische Nachweise sind nur für Klasse 1 und 2 zulässig. Die Werte dienen nur der Orientierung, maßgebend ist der elastische Nachweis (Vergleichsspannung).</p>`;
+    } else if (ep.zulaessig === null) {
+      h += '<p class="hinweis">Querschnittsklasse nicht ermittelt: Die plastischen Nachweise gelten nur, wenn Klasse 1 oder 2 sichergestellt ist.</p>';
+    }
+    h += "<table><tr><th></th><th>y–y</th><th>z–z</th><th></th></tr>";
+    h += zeileN("V<sub>Ed</sub>", fmt(ep.y.V, 1), fmt(ep.z.V, 1), "kN");
+    h += zeileN("V<sub>Ed</sub> / V<sub>pl,Rd</sub>", zOS(ep.y.Vpl ? ep.y.etaV : null, 3), zOS(ep.z.Vpl ? ep.z.etaV : null, 3), "");
+    h += zeileN(lbl("ρ", "rho"), fmt(ep.y.rho, 3), fmt(ep.z.rho, 3), "");
+    h += zeileN(lbl("M<sub>V,Rd</sub>", "MV"), fmt(ep.y.MV, 1), fmt(ep.z.MV, 1), "kNm");
+    h += zeileN(lbl("M<sub>N,Rd</sub> (n = " + fmt(ep.n, 3) + ")", "MN"), fmt(ep.y.MN, 1), fmt(ep.z.MN, 1), "kNm");
+    h += zeileN("<b>M<sub>N,V,Rd</sub></b>", `<b>${fmt(ep.y.MNV, 1)}</b>`, `<b>${fmt(ep.z.MNV, 1)}</b>`, "kNm");
+    h += zeileN("M<sub>Ed</sub>", fmt(ep.y.M, 1), fmt(ep.z.M, 1), "kNm");
+    h += zeileN("M<sub>Ed</sub> / M<sub>N,V,Rd</sub>", fmt(ep.y.M / ep.y.MNV, 3), fmt(ep.z.M / ep.z.MNV, 3), "");
+    h += "</table>";
+    const ok = ep.etaMax <= 1 + 1e-9;
+    const eta = Number.isFinite(ep.eta) ? fmt(ep.eta * 100, 1) + " %" : "∞";
+    h += `<p>Interaktion ${infoBtn("interaktion")} (α = ${fmt(ep.alpha, 2)}, β = ${fmt(ep.beta, 2)}): <b>${eta}</b><br>` +
+         `<b>Ausnutzung E-P = ${Number.isFinite(ep.etaMax) ? fmt(ep.etaMax * 100, 1) + " %" : "∞"}</b> ${haken(ok)}` +
+         `<div class="balken"><i class="${ok ? "" : "zu-viel"}" style="width:${Math.min(100, ep.etaMax * 100) || 0}%"></i></div></p>`;
 
     // Klassifizierung im Detail
     if (r.klassen) {
@@ -252,11 +278,11 @@ class TragfaehigkeitAnzeige {
 
     // Hinweise
     const hinweise = [];
-    if (!r.klassen) hinweise.push("Querschnittsklasse für diese Form nicht ermittelt: M<sub>c,Rd</sub> nicht angegeben, M<sub>pl,Rd</sub> gilt nur bei Klasse 1 und 2.");
-    if ([r.y.klasse, r.z.klasse, r.klasseDruck].includes(4)) hinweise.push("Klasse 4: Beulen (wirksamer Querschnitt) wird nicht berechnet, deshalb ist dafür kein M<sub>c,Rd</sub> angegeben und N<sub>pl,Rd</sub> nicht anwendbar.");
-    if (q.unsymmetrisch) hinweise.push("Unsymmetrischer Querschnitt: Die Biegetragfähigkeiten gelten für die Achsen y und z, nicht für die Hauptachsen.");
+    if (!r.klassen) hinweise.push("Querschnittsklasse für diese Form nicht ermittelt: M<sub>c,Rd</sub> nicht angegeben.");
+    if ([r.y.klasse, r.z.klasse, r.klasseDruck].includes(4)) hinweise.push("Klasse 4: Beulen (wirksamer Querschnitt) wird nicht berechnet.");
+    if (q.unsymmetrisch) hinweise.push("Unsymmetrischer Querschnitt: Die Tragfähigkeiten gelten für die Achsen y und z, nicht für die Hauptachsen.");
     if (r.Av && r.Av.hinweis) hinweise.push(r.Av.hinweis);
-    hinweise.push("Biegung, Normalkraft und Querkraft einzeln betrachtet; Abminderungen durch N und V (EN 1993-1-1, 6.2.8 bis 6.2.10) sind nicht berücksichtigt.");
+    hinweise.push(`Interaktion: ${ep.bem}.`);
     h += "<ul>" + hinweise.map(t => `<li>${t}</li>`).join("") + "</ul>";
     return h;
   }
@@ -267,8 +293,9 @@ class TragfaehigkeitAnzeige {
 class SpannungsAnzeige {
   constructor() {
     this.punkte = [];                       // vom Nutzer gesetzte Punkte {y, z}
+    this.feld = "sigma";                    // dargestelltes Feld: sigma | tau | v
     this.ansicht = new Ansicht3D(document.getElementById("canvas3d"));
-    this.letzte = null;                     // zuletzt angezeigte Daten {q, sp, fyd} für den Punkt-Rückruf
+    this.letzte = null;
     document.getElementById("pt-add").addEventListener("click", () => {
       this.punkte.push({ y: zahl("pt-y"), z: zahl("pt-z") });
       this.neuZeichnen();
@@ -281,51 +308,65 @@ class SpannungsAnzeige {
       const [az, el] = btn.dataset.ansicht.split(",").map(Number);
       this.ansicht.setzeAnsicht(az, el);
     }));
+    document.querySelectorAll("[data-feld]").forEach(btn => btn.addEventListener("click", () => {
+      this.feld = btn.dataset.feld;
+      document.querySelectorAll("[data-feld]").forEach(b => b.classList.toggle("aktiv", b === btn));
+      this.neuZeichnen();
+    }));
     document.getElementById("zoom-plus").addEventListener("click", () => this.ansicht.zoomen(1.25));
     document.getElementById("zoom-minus").addEventListener("click", () => this.ansicht.zoomen(1 / 1.25));
   }
 
   /** Alles mit neuen Daten anzeigen. @param {number} fyd Bemessungsstreckgrenze [N/mm²] */
-  zeige(q, sp, fyd) {
-    this.letzte = { q, sp, fyd };
+  zeige(q, sp, schub, fyd) {
+    this.letzte = {
+      q, sp, schub, fyd,
+      felder: { sigma: new Spannungsfeld(sp, schub, "sigma"), tau: new Spannungsfeld(sp, schub, "tau"), v: new Spannungsfeld(sp, schub, "v") },
+    };
     this.neuZeichnen();
   }
 
   neuZeichnen() {
     if (!this.letzte) return;
-    const { q, sp, fyd } = this.letzte;
-    this.nachweis(sp, fyd);
-    this.zeigePunkte(q, sp);
-    this.ansicht.setzeDaten(q, sp, this.punkte, fyd);
+    const { q, sp, schub, fyd, felder } = this.letzte;
+    this.nachweis(felder, fyd);
+    this.zeigePunkte(q, felder.sigma, schub);
+    const grenze = this.feld === "tau" ? fyd / Math.sqrt(3) : fyd;
+    this.ansicht.setzeDaten(q, felder[this.feld], this.punkte, grenze);
   }
 
-  /** Extremwerte und Vergleich mit f_yd (elastischer Spannungsnachweis). */
-  nachweis(sp, fyd) {
-    const e = sp.extremwerte();
-    const maxAbs = Math.max(Math.abs(e.max.wert), Math.abs(e.min.wert));
-    const ausn = maxAbs / fyd, ok = ausn <= 1 + 1e-9;
+  /** Extremwerte und Vergleich mit f_yd (elastischer Nachweis mit der Vergleichsspannung). */
+  nachweis(felder, fyd) {
+    const es = felder.sigma.extremwerte(), et = felder.tau.extremwerte(), ev = felder.v.extremwerte();
+    const ausn = ev.max.wert / fyd, ok = ausn <= 1 + 1e-9;
     const haken = ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>';
+    const ort = e => nb(`bei y = ${fmt(e.y, 1)}, z = ${fmt(e.z, 1)} mm`);
     document.getElementById("sp-nachweis").innerHTML =
       `${nb(`f<sub>yd</sub> = <b>${fmt(fyd, 1)}</b> N/mm²`)} ${infoBtn("ausnutzung")}<br>` +
-      `${nb(`σ<sub>max</sub> = <b>${fmt(e.max.wert)}</b> N/mm²`)} ${nb(`bei y = ${fmt(e.max.y, 1)}, z = ${fmt(e.max.z, 1)} mm`)}<br>` +
-      `${nb(`σ<sub>min</sub> = <b>${fmt(e.min.wert)}</b> N/mm²`)} ${nb(`bei y = ${fmt(e.min.y, 1)}, z = ${fmt(e.min.z, 1)} mm`)} ${infoBtn("sigmaExtrem")}<br>` +
-      `<b>Ausnutzung max|σ| / f<sub>yd</sub> = ${fmt(ausn * 100, 1)} %</b> ${haken}` +
+      `${nb(`σ<sub>max</sub> = <b>${fmt(es.max.wert)}</b>`)} ${nb(`σ<sub>min</sub> = <b>${fmt(es.min.wert)}</b> N/mm²`)} ${infoBtn("sigmaExtrem")}<br>` +
+      `${nb(`τ<sub>max</sub> = <b>${fmt(et.max.wert)}</b> N/mm²`)} ${infoBtn("tau")}<br>` +
+      `${nb(`σ<sub>v,max</sub> = <b>${fmt(ev.max.wert)}</b> N/mm²`)} ${ort(ev.max)} ${infoBtn("vergleich")}<br>` +
+      `<b>Ausnutzung σ<sub>v,max</sub> / f<sub>yd</sub> = ${fmt(ausn * 100, 1)} %</b> ${haken}` +
       `<div class="balken"><i class="${ok ? "" : "zu-viel"}" style="width:${Math.min(100, ausn * 100)}%"></i></div>` +
-      `<span class="hinweis">Nulllinie ${infoBtn("nulllinie")} – elastischer Nachweis, Schub und Vergleichsspannung nicht enthalten.</span>`;
+      `<span class="hinweis">Nulllinie ${infoBtn("nulllinie")}</span>`;
   }
 
-  /** Punkttabelle mit Spannungen füllen. */
-  zeigePunkte(q, sp) {
+  /** Punkttabelle mit σ, τ und σ_v füllen. */
+  zeigePunkte(q, feldSigma, schub) {
+    const sp = feldSigma.sp;
     const tb = document.querySelector("#pt-tabelle tbody");
     let ausserhalb = false;
     tb.innerHTML = this.punkte.map((p, i) => {
       const aussen = !q.enthaelt(p.y, p.z);
       ausserhalb = ausserhalb || aussen;
+      const sig = sp.sigma(p.y, p.z), tau = schub.tau(p.y, p.z).t;
       return `<tr><td>P${i + 1}${aussen ? " *" : ""}</td><td>${fmt(p.y, 1)}</td><td>${fmt(p.z, 1)}</td>` +
-             `<td>${fmt(sp.sigma(p.y, p.z))}</td><td><button data-loesche="${i}" title="Löschen">✕</button></td></tr>`;
+             `<td>${fmt(sig, 1)}</td><td>${fmt(tau, 1)}</td><td>${fmt(Math.sqrt(sig * sig + 3 * tau * tau), 1)}</td>` +
+             `<td><button data-loesche="${i}" title="Löschen">✕</button></td></tr>`;
     }).join("");
-    document.getElementById("pt-hinweis").textContent =
-      ausserhalb ? "* Punkt liegt außerhalb des Querschnitts (Wert gilt für die verlängerte Spannungsebene)." : "";
+    document.getElementById("pt-hinweis").textContent = ausserhalb
+      ? "* Punkt liegt außerhalb des Querschnitts (Werte gelten für die verlängerte Spannungsebene)."
+      : "Koordinaten in mm, Spannungen in N/mm².";
   }
 }
 
@@ -342,13 +383,13 @@ class StahlbauSeite {
     STAHLGUETEN.forEach(([name]) => sel.add(new Option(name, name)));
     sel.value = "S355";
     sel.addEventListener("change", () => this.aktualisiere());
-    for (const id of ["st-gm0", "in-N", "in-My", "in-Mz"]) {
+    for (const id of ["st-gm0", "in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"]) {
       document.getElementById(id).addEventListener("input", () => this.aktualisiere());
     }
     this.aktualisiere();
   }
 
-  /** Querschnitt einmal erzeugen und an alle drei Anzeigen weitergeben. */
+  /** Querschnitt einmal erzeugen und an alle Anzeigen weitergeben. */
   aktualisiere() {
     const fehler = txt => {
       const f = `<span class="fehler">${txt}</span>`;
@@ -360,12 +401,16 @@ class StahlbauSeite {
     const name = document.getElementById("st-guete").value;
     const fy = STAHLGUETEN.find(s => s[0] === name)[1];
     const gm0 = zahl("st-gm0") > 0 ? zahl("st-gm0") : 1;
+    const [N, Vy, Vz, My, Mz] = ["in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"].map(zahl);
+
     const r = new Stahlbemessung(q, fy, gm0).berechne();
-    const sp = new Spannung(q, zahl("in-N"), zahl("in-My"), zahl("in-Mz"));
+    const ep = new PlastischerNachweis(q, fy, gm0, r).berechne(N, Vy, Vz, My, Mz);
+    const sp = new Spannung(q, N, My, Mz);
+    const schub = new Schubspannung(q, Vy, Vz);
 
     document.getElementById("qw-tabelle").innerHTML = QuerschnittswerteAnzeige.html(q);
-    document.getElementById("tf-ergebnis").innerHTML = TragfaehigkeitAnzeige.html(q, r);
-    this.spannung.zeige(q, sp, fy / gm0);
+    document.getElementById("tf-ergebnis").innerHTML = TragfaehigkeitAnzeige.html(q, r, ep);
+    this.spannung.zeige(q, sp, schub, fy / gm0);
     this.skizze.zeichne(q, { pna: { y: r.z.lage, z: r.y.lage } });
   }
 
@@ -472,8 +517,9 @@ class SBSkizze {
   }
 
   /**
-   * Spannungsverlauf (rechte Spalte): Betondruckspannung im Spannungsblock (links der Nulllinie)
-   * und Stahlspannungen als Pfeile (Zug rechts, Druck links). Beton und Stahl haben getrennte Maßstäbe.
+   * Spannungsverlauf (rechte Spalte). Beton: Parabel-Rechteck-Diagramm aus der Dehnungsebene und
+   * rechteckiger Spannungsblock; das gewählte Modell ist gefüllt, das andere gestrichelt (Vergleich).
+   * Stahl: Pfeile (Zug rechts, Druck links). Beton und Stahl haben getrennte Maßstäbe.
    */
   _zeichneSpannungen(g, q, res, { x1, w, rand, Y, zp }) {
     const sp = res.spannung;
@@ -485,12 +531,36 @@ class SBSkizze {
     g.strokeStyle = "#888"; g.lineWidth = 1;
     g.beginPath(); g.moveTo(xz, Y(0)); g.lineTo(xz, Y(q.h)); g.stroke();
 
-    // Beton: Spannungsblock über die Höhe λ·x vom Druckrand
-    const ya = Y(zp(0)), yb = Y(zp(res.s)), top = Math.min(ya, yb), hoehe = Math.abs(yb - ya);
-    g.fillStyle = "rgba(40,90,200,0.35)"; g.strokeStyle = "#1f4e9a"; g.lineWidth = 1.5;
-    g.fillRect(xz - bMax, top, bMax, hoehe); g.strokeRect(xz - bMax, top, bMax, hoehe);
+    const breiteSig = sig => bMax * sig / res.fcd;           // Breite im Diagramm: f_cd entspricht bMax
+    const modelle = {
+      // Parabel-Rechteck: Polygon aus den Stützstellen (Spannung wird zur Nulllinie hin Null)
+      pr: () => {
+        g.beginPath(); g.moveTo(xz, Y(zp(0)));
+        for (const p of sp.pr) g.lineTo(xz - breiteSig(p.sig), Y(zp(p.z)));
+        g.lineTo(xz, Y(zp(res.x))); g.closePath();
+      },
+      // Spannungsblock: Rechteck der Höhe λ·x mit der Spannung η·f_cd
+      block: () => {
+        g.beginPath(); g.rect(xz - breiteSig(sp.sigC), Math.min(Y(zp(0)), Y(zp(res.sBlock))), breiteSig(sp.sigC), Math.abs(Y(zp(res.sBlock)) - Y(zp(0))));
+      },
+    };
+    const anderes = res.modus === "pr" ? "block" : "pr";
+    // Vergleichsmodell gestrichelt
+    g.save(); g.setLineDash([4, 3]); g.strokeStyle = "#7a8fb5"; g.lineWidth = 1.2; modelle[anderes](); g.stroke(); g.restore();
+    // gewähltes Modell gefüllt
+    g.fillStyle = "rgba(40,90,200,0.35)"; g.strokeStyle = "#1f4e9a"; g.lineWidth = 1.6;
+    modelle[res.modus](); g.fill(); g.stroke();
+
+    // Betonspannung am Druckrand und Knickpunkt ε_c2 (Übergang Parabel -> Rechteck)
     g.fillStyle = "#111"; g.textAlign = "left";
-    g.fillText(`−${fmt(sp.sigC, 1)}`, xz - bMax + 2, top + (res.negativ ? -4 : hoehe + 12));
+    const yTop = Y(zp(0));
+    g.fillText(`−${fmt(sp.sigCmax, 1)}`, xz - breiteSig(sp.sigCmax) - 2, yTop + (res.negativ ? -5 : 12));
+    if (res.modus === "pr" && sp.epsTop > res.epsC2) {
+      const zk = res.x * (1 - res.epsC2 / sp.epsTop);          // Tiefe, in der ε_c = ε_c2 erreicht wird
+      g.save(); g.setLineDash([2, 3]); g.strokeStyle = "#1f4e9a"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(xz - bMax - 2, Y(zp(zk))); g.lineTo(xz + 2, Y(zp(zk))); g.stroke(); g.restore();
+      g.fillStyle = "#1f4e9a"; g.fillText("ε_c2", xz + 4, Y(zp(zk)) + (res.negativ ? -2 : 10));
+    }
 
     // Bewehrung: Pfeil von der Nulllinie, Länge ~ Spannung/f_yd (Zug rechts, Druck links)
     const pfeil = (yPix, sigma, farbe) => {
@@ -506,6 +576,7 @@ class SBSkizze {
     if (res.As2 > 0) pfeil(Y(zp(q.d2)), -sp.sigS2, "#1b3a6b");
     g.textAlign = "left";
     g.fillStyle = "#666"; g.fillText("Maßstäbe getrennt", x1 - 2, Y(q.h) + 12);
+    g.fillText(res.modus === "pr" ? "gestrichelt: Spannungsblock" : "gestrichelt: Parabel-Rechteck", x1 - 2, Y(q.h) + 24);
   }
 }
 
@@ -518,7 +589,7 @@ class StahlbetonSeite {
     BETONKLASSEN.forEach(k => sel.add(new Option(k[0], k[0])));
     sel.value = "C30/37";
 
-    const ids = ["sb-typ", "sb-b", "sb-h", "sb-bf", "sb-hf", "sb-d1", "sb-d2", "sb-beton", "sb-stahl", "sb-M"];
+    const ids = ["sb-typ", "sb-b", "sb-h", "sb-bf", "sb-hf", "sb-d1", "sb-d2", "sb-beton", "sb-stahl", "sb-linie", "sb-M"];
     ids.forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
     this.aktualisiere();
   }
@@ -538,7 +609,8 @@ class StahlbetonSeite {
         d1: zahl("sb-d1"), d2: zahl("sb-d2"),
       });
       const beton = Beton.aus(document.getElementById("sb-beton").value);
-      const res = new Biegebemessung(q, beton, new Betonstahl()).bemesse(zahl("sb-M"));
+      const res = new Biegebemessung(q, beton, new Betonstahl()).bemesse(zahl("sb-M"), document.getElementById("sb-linie").value);
+      res.epsC2 = beton.epsC2; res.nPR = beton.nPR;   // für Tabelle und Skizze
       this.zeigeErgebnis(box, res);
       this.skizze.zeichne(q, res);
     } catch (e) {
@@ -551,11 +623,16 @@ class StahlbetonSeite {
     if (r.fehler) { box.innerHTML = `<span class="fehler">${r.fehler}</span>`; this.skizze.leeren(); return; }
     const haken = ok => ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>';
 
-    let h = `<b>${r.fall}</b> – ${r.druckzone}${r.negativ ? " (Zug oben)" : ""}<table>`;
+    let h = `<b>${r.fall}</b> – ${r.druckzone}${r.negativ ? " (Zug oben)" : ""}<br><span class="hinweis">Betonarbeitslinie: ${r.modus === "pr" ? "Parabel-Rechteck-Diagramm" : "rechteckiger Spannungsblock"}</span><table>`;
     h += zeile(lbl("f<sub>cd</sub>", "fcd"), fmt(r.fcd), "N/mm²");
     h += zeile(lbl("f<sub>yd</sub>", "fyd"), fmt(r.fyd), "N/mm²");
-    h += zeile(lbl("λ", "lambdaEta"), fmt(r.lambda), "–");
-    h += zeile("η", fmt(r.eta), "–");
+    if (r.modus === "pr") {
+      h += zeile(lbl("n (Parabel-Rechteck)", "arbeitslinie"), fmt(r.nPR, 2), "–");
+      h += zeile("ε<sub>c2</sub>", fmt(r.epsC2, 1), "‰");
+    } else {
+      h += zeile(lbl("λ", "lambdaEta"), fmt(r.lambda), "–");
+      h += zeile("η", fmt(r.eta), "–");
+    }
     h += zeile(lbl("ε<sub>cu2</sub>", "epsCu2"), fmt(r.epsCu2, 1), "‰");
     h += zeile(lbl("Nutzhöhe d","d"), fmt(r.d / 10, 1), "cm");
     h += zeile(lbl("Druckzonenhöhe x","x"), fmt(r.x / 10, 1), "cm");
@@ -584,8 +661,9 @@ class StahlbetonSeite {
     const sp = r.spannung;
     if (sp) {
       h += `<p><b>Spannungen</b> ${infoBtn("sbSpannung")}</p><table>`;
-      h += zeile("Beton σ<sub>c</sub> = −η·f<sub>cd</sub>", fmt(-sp.sigC, 1), "N/mm²");
-      h += zeile("Höhe des Blocks λ·x", fmt(r.s / 10, 1), "cm");
+      h += zeile("Beton σ<sub>c</sub> am Druckrand", fmt(-sp.sigCmax, 1), "N/mm²");
+      h += zeile("Betondruckkraft F<sub>c</sub>", fmt(r.Fc / 1e3, 0), "kN");
+      h += zeile(r.modus === "pr" ? "Druckzonenhöhe x" : "Höhe des Blocks λ·x", fmt(r.s / 10, 1), "cm");
       h += zeile("Zugbewehrung σ<sub>s1</sub>", fmt(sp.sigS1, 1), "N/mm²");
       if (r.As2 > 0) h += zeile("Druckbewehrung σ<sub>s2</sub>", fmt(-sp.sigS2, 1), "N/mm²");
       h += "</table>";

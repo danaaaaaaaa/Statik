@@ -188,16 +188,110 @@ const INFO = {
       "Bei Querschnitten der Klasse 1 und 2 darf auch plastisch nachgewiesen werden (siehe Tragfähigkeit).",
     normen: [`${EC3}, 6.2.1(5) (Fließkriterium, elastischer Nachweis)`],
   },
+  arbeitslinie: {
+    titel: "Spannungs-Dehnungs-Linie des Betons",
+    formeln: [
+      "Parabel-Rechteck-Diagramm: &nbsp;0 ≤ ε<sub>c</sub> ≤ ε<sub>c2</sub>: σ<sub>c</sub> = f<sub>cd</sub>·[ 1 − (1 − ε<sub>c</sub>/ε<sub>c2</sub>)<sup>n</sup> ]",
+      "ε<sub>c2</sub> ≤ ε<sub>c</sub> ≤ ε<sub>cu2</sub>: σ<sub>c</sub> = f<sub>cd</sub>",
+      "f<sub>ck</sub> ≤ 50 N/mm²: n = 2,0, ε<sub>c2</sub> = 2,0 ‰, ε<sub>cu2</sub> = 3,5 ‰",
+      "Spannungsblock: Höhe λ·x, Spannung η·f<sub>cd</sub>",
+    ],
+    text: "Beim Parabel-Rechteck-Diagramm wird die Betonspannung an jeder Stelle der Druckzone aus der Dehnungsebene bestimmt; die Druckkraft und ihr Moment ergeben sich durch numerische Integration über die Druckzone (Plattenbalken mit Gurtbreite). " +
+      "Der Spannungsblock ist die vereinfachte Ersatzform; beide Verfahren sind zulässig und liefern ähnliche Bewehrungsmengen. In Bereich 2 ist die Betonstauchung kleiner als ε<sub>cu2</sub> (ε<sub>c</sub> = 25 ‰·x/(d − x)).",
+    normen: [`${EC2}, 3.1.7(1), Bild 3.3, Gl. (3.17), (3.18)`, `${EC2}, 3.1.7(3), Bild 3.5 (Spannungsblock)`, `${EC2}, Tab. 3.1 (ε<sub>c2</sub>, ε<sub>cu2</sub>, n)`],
+  },
   sbSpannung: {
     titel: "Spannungsverlauf im Querschnitt",
     formeln: [
-      "Beton: σ<sub>c</sub> = −η·f<sub>cd</sub> &nbsp;konstant über die Höhe λ·x (Spannungsblock)",
+      "Parabel-Rechteck: σ<sub>c</sub>(z) = f<sub>cd</sub>·[ 1 − (1 − ε<sub>c</sub>(z)/ε<sub>c2</sub>)<sup>n</sup> ] mit ε<sub>c</sub> aus der Dehnungsebene",
+      "Spannungsblock: σ<sub>c</sub> = −η·f<sub>cd</sub> &nbsp;konstant über die Höhe λ·x",
       "Zugbewehrung: σ<sub>s1</sub> = min( ε<sub>s1</sub>·E<sub>s</sub> ; f<sub>yd</sub> )",
       "Druckbewehrung: σ<sub>s2</sub> = min( |ε<sub>s2</sub>|·E<sub>s</sub> ; f<sub>yd</sub> )",
     ],
-    text: "Vereinfachter rechteckiger Spannungsblock statt der Parabel-Rechteck-Linie. Beton und Stahl sind in getrennten Maßstäben gezeichnet. " +
+    text: "Gezeichnet ist die Betonspannung der gewählten Arbeitslinie (gestrichelt die jeweils andere zum Vergleich). Beton und Stahl sind in getrennten Maßstäben gezeichnet. " +
       "Der Beton nimmt keine Zugspannungen auf.",
-    normen: [`${EC2}, 3.1.7(3), Bild 3.5 (Spannungsblock)`, `${EC2}, 3.2.7 (Spannungs-Dehnungs-Linie des Betonstahls)`],
+    normen: [`${EC2}, 3.1.7, Bild 3.3 und 3.5`, `${EC2}, 3.2.7 (Spannungs-Dehnungs-Linie des Betonstahls)`],
+  },
+
+  /* ---------------- Querkraft, Vergleichsspannung, plastische Nachweise ---------------- */
+
+  tau: {
+    titel: "Schubspannung τ aus Querkraft (Jourawski)",
+    formeln: [
+      "τ<sub>z</sub> = V<sub>z</sub>·S<sub>y</sub>(z) / ( I<sub>y</sub>·b(z) ) &nbsp;(waagerechter Schnitt)",
+      "τ<sub>y</sub> = V<sub>y</sub>·S<sub>z</sub>(y) / ( I<sub>z</sub>·b(y) ) &nbsp;(senkrechter Schnitt)",
+      "τ = √( τ<sub>z</sub>² + τ<sub>y</sub>² )",
+    ],
+    text: "S = statisches Moment der abgeschnittenen Fläche um die Schwerachse, b = Materialbreite im Schnitt. " +
+      "Das Verfahren liefert die mittlere Schubspannung über den Schnitt und ist für dünnwandige Querschnitte und Vollquerschnitte gut geeignet. " +
+      "Torsion und Schubmittelpunkt sind nicht enthalten; bei unsymmetrischen Querschnitten (I<sub>yz</sub> ≠ 0) ist es nur eine Näherung. " +
+      "S(z) und b(z) werden numerisch aus der Querschnittsgeometrie bestimmt.",
+    normen: [`${EC3}, 6.2.6(4), Gl. (6.20)`],
+  },
+  vergleich: {
+    titel: "Vergleichsspannung σ<sub>v</sub>",
+    formeln: [
+      "σ<sub>v</sub> = √( σ<sub>x</sub>² + 3·τ² ) &nbsp;(σ<sub>z</sub> = 0)",
+      "Nachweis: σ<sub>v</sub> ≤ f<sub>y</sub> / γ<sub>M0</sub>",
+      "allgemein: (σ<sub>x</sub>/f<sub>yd</sub>)² + (σ<sub>z</sub>/f<sub>yd</sub>)² − (σ<sub>x</sub>/f<sub>yd</sub>)(σ<sub>z</sub>/f<sub>yd</sub>) + 3(τ/f<sub>yd</sub>)² ≤ 1",
+    ],
+    text: "Fließkriterium nach von Mises für den elastischen Nachweis (E-E). σ<sub>x</sub> aus N, M<sub>y</sub>, M<sub>z</sub>, τ aus V<sub>y</sub>, V<sub>z</sub>. " +
+      "Der Größtwert wird über Rand- und Innenpunkte gesucht (häufig am Übergang Steg/Flansch).",
+    normen: [`${EC3}, 6.2.1(5), Gl. (6.1)`],
+  },
+  epNachweis: {
+    titel: "Plastischer Nachweis (Verfahren E-P)",
+    formeln: [
+      "V<sub>Ed</sub> / V<sub>pl,Rd</sub> ≤ 1,0",
+      "M<sub>y,Ed</sub> / M<sub>N,V,y,Rd</sub> ≤ 1,0 &nbsp;bzw. zweiachsig: [M<sub>y,Ed</sub>/M<sub>N,V,y,Rd</sub>]<sup>α</sup> + [M<sub>z,Ed</sub>/M<sub>N,V,z,Rd</sub>]<sup>β</sup> ≤ 1,0",
+    ],
+    text: "E-P: Schnittgrößen elastisch ermittelt, Querschnitt plastisch ausgenutzt. Zulässig nur für Querschnitte der Klasse 1 und 2. " +
+      "Die Ausnutzung ist der größte Wert aus Querkraft, Normalkraft und der Interaktion von Biegung, Normalkraft und Querkraft. " +
+      "Bei Klasse 3 ist der elastische Nachweis (Vergleichsspannung) zu führen.",
+    normen: [`${EC3}, 6.2.8 (Biegung und Querkraft)`, `${EC3}, 6.2.9 (Biegung und Normalkraft)`, `${EC3}, 6.2.10 (Biegung, Querkraft und Normalkraft)`],
+  },
+  rho: {
+    titel: "Abminderungsfaktor ρ (Querkraft)",
+    formeln: [
+      "V<sub>Ed</sub> ≤ 0,5·V<sub>pl,Rd</sub>: ρ = 0 (keine Abminderung)",
+      "V<sub>Ed</sub> > 0,5·V<sub>pl,Rd</sub>: ρ = ( 2·V<sub>Ed</sub> / V<sub>pl,Rd</sub> − 1 )²",
+    ],
+    text: "Im Schubbereich (Steg bzw. A<sub>v</sub>) wird die Streckgrenze auf (1 − ρ)·f<sub>y</sub> abgemindert.",
+    normen: [`${EC3}, 6.2.8(3)`],
+  },
+  MV: {
+    titel: "Momententragfähigkeit bei Querkraft M<sub>V,Rd</sub>",
+    formeln: [
+      "M<sub>V,Rd</sub> = ( W<sub>pl</sub> − ρ·W<sub>v</sub> ) · f<sub>y</sub> / γ<sub>M0</sub> &nbsp;≤ M<sub>pl,Rd</sub>",
+      "W<sub>v</sub> = A<sub>v</sub>·h<sub>v</sub> / 4 &nbsp;(plastisches Widerstandsmoment des Schubbereichs, ≤ W<sub>pl</sub>)",
+      "I-Profil (um y): W<sub>v</sub> = t<sub>w</sub>·h<sub>w</sub>² / 4 &nbsp;⇒&nbsp; M<sub>y,V,Rd</sub> = [ W<sub>pl,y</sub> − ρ·A<sub>w</sub>²/(4·t<sub>w</sub>) ]·f<sub>y</sub>/γ<sub>M0</sub>",
+    ],
+    text: "h<sub>v</sub> = Hebelarm des Schubbereichs: h − 2t<sub>f</sub> (Steg) bzw. b (Flansche); bei Vollquerschnitten, Rohren und Polygonen wird der gesamte Querschnitt als Schubbereich angesetzt (W<sub>v</sub> = W<sub>pl</sub>, auf der sicheren Seite).",
+    normen: [`${EC3}, 6.2.8(3), Gl. (6.30)`],
+  },
+  MN: {
+    titel: "Momententragfähigkeit bei Normalkraft M<sub>N,Rd</sub>",
+    formeln: [
+      "n = N<sub>Ed</sub> / N<sub>pl,Rd</sub>",
+      "I/H um y: M<sub>N,y,Rd</sub> = M<sub>pl,y,Rd</sub>·(1 − n)/(1 − 0,5·a) ≤ M<sub>pl,y,Rd</sub>, &nbsp;a = (A − 2·b·t<sub>f</sub>)/A ≤ 0,5",
+      "I/H um z: n ≤ a: M<sub>N,z,Rd</sub> = M<sub>pl,z,Rd</sub>; &nbsp;n > a: M<sub>pl,z,Rd</sub>·[ 1 − ((n − a)/(1 − a))² ]",
+      "Hohlprofil: M<sub>N,Rd</sub> = M<sub>pl,Rd</sub>·(1 − n)/(1 − 0,5·a<sub>w</sub> bzw. a<sub>f</sub>) ≤ M<sub>pl,Rd</sub>, &nbsp;a<sub>w</sub> = (A − 2bt)/A, a<sub>f</sub> = (A − 2ht)/A ≤ 0,5",
+      "alle anderen Querschnitte: numerisch aus dem Gleichgewicht der Spannungsblöcke ±f<sub>yd</sub> mit N",
+    ],
+    text: "Bei gleichzeitiger Querkraft über 0,5·V<sub>pl,Rd</sub>: M<sub>N,V,Rd</sub> = M<sub>N,Rd</sub>·M<sub>V,Rd</sub>/M<sub>pl,Rd</sub> (abgeminderte Streckgrenze im Schubbereich).",
+    normen: [`${EC3}, 6.2.9.1, Gl. (6.36), (6.37)`, `${EC3}, 6.2.10 (Kombination mit Querkraft)`],
+  },
+  interaktion: {
+    titel: "Interaktion Biegung, Normalkraft und Querkraft",
+    formeln: [
+      "[ M<sub>y,Ed</sub> / M<sub>N,V,y,Rd</sub> ]<sup>α</sup> + [ M<sub>z,Ed</sub> / M<sub>N,V,z,Rd</sub> ]<sup>β</sup> ≤ 1,0",
+      "I/H: α = 2, β = 5n ≥ 1",
+      "Rechteckhohlprofil: α = β = 1,66 / (1 − 1,13·n²) ≤ 6",
+      "Rohr: α = β = 2",
+      "sonstige Querschnitte: α = β = 1 (linear, auf der sicheren Seite)",
+    ],
+    text: "Für einachsige Biegung (M<sub>z</sub> = 0) vereinfacht sich der Nachweis zu M<sub>y,Ed</sub> ≤ M<sub>N,V,y,Rd</sub>.",
+    normen: [`${EC3}, 6.2.9.1(6), Gl. (6.41)`],
   },
 
   /* ---------------- Spannungen ---------------- */
@@ -337,7 +431,7 @@ const INFO = {
     titel: "Querkrafttragfähigkeit V<sub>pl,Rd</sub>",
     formeln: ["V<sub>pl,Rd</sub> = A<sub>v</sub> · ( f<sub>y</sub> / √3 ) / γ<sub>M0</sub>"],
     text: "Plastische Querkrafttragfähigkeit. Nachweis V<sub>Ed</sub> / V<sub>c,Rd</sub> ≤ 1,0. " +
-      "Ab V<sub>Ed</sub> > 0,5·V<sub>pl,Rd</sub> ist die Momententragfähigkeit abzumindern (hier nicht berücksichtigt).",
+      "Ab V<sub>Ed</sub> > 0,5·V<sub>pl,Rd</sub> ist die Momententragfähigkeit abzumindern (siehe plastischer Nachweis E-P).",
     normen: [`${EC3}, 6.2.6(1) und (2), Gl. (6.17), (6.18)`, `${EC3}, 6.2.8 (Biegung und Querkraft)`],
   },
 

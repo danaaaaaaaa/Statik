@@ -43,6 +43,9 @@ class Ansicht3D {
    */
   setzeDaten(q, sp, punkte, grenze = null) {
     this.q = q; this.sp = sp; this.punkte = punkte; this.grenze = grenze;
+    // Felder ohne Vorzeichen (τ, σ_v): nur positive Werte, Legende von 0 bis Bezugswert
+    this.mitVorzeichen = sp.vorzeichen !== false;
+    this.titel = sp.titel || "σ";
     this._vorbereiten();
     this.zeichne();
   }
@@ -159,12 +162,12 @@ class Ansicht3D {
     g.save();
     g.setLineDash([5, 4]); g.strokeStyle = "#d9822b"; g.lineWidth = 1.5; g.fillStyle = "#a85d10";
     g.font = "11px system-ui, sans-serif";
-    for (const v of [this.grenze, -this.grenze]) {
+    for (const v of this.mitVorzeichen ? [this.grenze, -this.grenze] : [this.grenze]) {
       const c = [[ymin, zmin], [ymax, zmin], [ymax, zmax], [ymin, zmax]].map(([y, z]) => this._p(y, z, v));
       g.beginPath(); g.moveTo(c[0].x, c[0].y);
       for (let i = 1; i < 4; i++) g.lineTo(c[i].x, c[i].y);
       g.closePath(); g.stroke();
-      g.fillText((v > 0 ? "+" : "−") + "f_yd", c[2].x + 4, c[2].y);
+      g.fillText((v > 0 && this.mitVorzeichen ? "+" : v < 0 ? "−" : "") + (this.titel === "τ" ? "f_yd/√3" : "f_yd"), c[2].x + 4, c[2].y);
     }
     g.restore();
   }
@@ -194,23 +197,26 @@ class Ansicht3D {
     };
     if (this.maxAbs > 1e-9) {
       marke(this.ext.max.y, this.ext.max.z, `max ${fmt(this.ext.max.wert)}`, "#b00020");
-      marke(this.ext.min.y, this.ext.min.z, `min ${fmt(this.ext.min.wert)}`, "#1f4e9a");
+      if (this.mitVorzeichen) marke(this.ext.min.y, this.ext.min.z, `min ${fmt(this.ext.min.wert)}`, "#1f4e9a");
     }
     this.punkte.forEach((p, i) => marke(p.y, p.z, `P${i + 1}: ${fmt(this.sp.sigma(p.y, p.z))}`, "#222"));
   }
 
   /** Farbskala rechts oben. */
   _zeichneLegende(g, w) {
-    const x = w - 46, y = 34, hh = 130;
+    const x = w - 46, y = 34, hh = 110;
     const grad = g.createLinearGradient(0, y, 0, y + hh);
-    grad.addColorStop(0, "rgb(255,38,38)"); grad.addColorStop(0.5, "rgb(255,255,255)"); grad.addColorStop(1, "rgb(38,38,255)");
+    grad.addColorStop(0, "rgb(255,38,38)");
+    grad.addColorStop(this.mitVorzeichen ? 0.5 : 1, "rgb(255,255,255)");
+    if (this.mitVorzeichen) grad.addColorStop(1, "rgb(38,38,255)");
     g.fillStyle = grad; g.fillRect(x, y, 14, hh);
     g.strokeStyle = "#666"; g.lineWidth = 1; g.strokeRect(x, y, 14, hh);
     g.font = "11px system-ui, sans-serif"; g.fillStyle = "#222"; g.textAlign = "right";
-    g.fillText("σ [N/mm²]", x + 14, y - 18);
-    const bez = this.grenze ? "f_yd " : "";
-    g.fillText("Zug " + bez + fmt(this.ref), x + 14, y - 6);
-    g.fillText("Druck −" + bez + fmt(this.ref), x + 14, y + hh + 14);
+    g.fillText(`${this.titel} [N/mm²]`, x + 14, y - 18);
+    const bez = this.grenze ? (this.titel === "τ" ? "f_yd/√3 " : "f_yd ") : "";
+    g.fillText((this.mitVorzeichen ? "Zug " : "") + bez + fmt(this.ref), x + 14, y - 6);
+    if (this.mitVorzeichen) g.fillText("Druck −" + bez + fmt(this.ref), x + 14, y + hh + 14);
+    else g.fillText("0", x + 14, y + hh + 14);
     g.textAlign = "left";
   }
 

@@ -148,6 +148,7 @@ class IProfil extends Walzprofil {
       hinweis: "Gewalzter I-Querschnitt: A<sub>v</sub> nach EN 1993-1-1, 6.2.6(3) a), η = 1,0.",
     };
   }
+  nachweisdaten() { const { h, b, tw, tf } = this.abm(); return { art: "I", b, h, tf, tw }; }
 }
 
 class IPE extends IProfil {
@@ -201,6 +202,7 @@ class UProfil extends Walzprofil {
       hinweis: "U-Profil: A<sub>v,z</sub> nach EN 1993-1-1, 6.2.6(3) b); A<sub>v,y</sub> wie bei I-Profilen angesetzt. Schubmittelpunkt nicht berücksichtigt.",
     };
   }
+  nachweisdaten() { const { h, b, tw, tf } = this.abm(); return { art: "U", b, h, tf, tw }; }
 }
 
 class UPN extends UProfil {
@@ -266,6 +268,7 @@ class Hohlprofil extends Querschnitt {
     const { h, b } = this.w;
     return { z: this.A * h / (b + h), y: this.A * b / (b + h), hinweis: "Hohlprofil: A<sub>v</sub> = A·h/(b+h) bzw. A·b/(b+h)." };
   }
+  nachweisdaten() { const { h, b, t } = this.w; return { art: "RHS", b, h, t }; }
 }
 
 class Quadratrohr extends Hohlprofil {

@@ -398,6 +398,47 @@ class Querschnitt {
   }
 
   /**
+   * Fläche A und statisches Moment S = ∫(g − Koordinate) dA aller Materialteile mit Koordinate < g
+   * (lokale Koordinaten; ko = 'z': oberhalb einer waagerechten, 'y': links einer senkrechten Linie).
+   */
+  bis(ko, g) {
+    let A = 0, S = 0;
+    for (const t of this.teile) { const r = t.anteil(ko, g); A += t.vz * r.A; S += t.vz * r.S; }
+    return { A, S };
+  }
+
+  /**
+   * Plastisches Grenzmoment bei gleichzeitiger Normalkraft (Spannungsblöcke ±fyd, Gleichgewicht mit N).
+   * Die Nulllinie liegt so, dass die gedrückte Fläche A_c = (A − N/fyd)/2 beträgt. Bei unsymmetrischen
+   * Querschnitten wird die ungünstigere der beiden Momentenrichtungen geliefert.
+   * @param {string} achse 'y' (Biegung um y) oder 'z'
+   * @param {number} N Normalkraft [N], Zug positiv
+   * @param {number} fyd Bemessungsstreckgrenze [N/mm²]
+   * @returns {number} Grenzmoment [Nmm]
+   */
+  plastischN(achse, N, fyd) {
+    const ko = achse === "y" ? "z" : "y";
+    const off = ko === "z" ? this.zs : this.ys;
+    const lo = (ko === "z" ? this.zmin : this.ymin) + off;
+    const hi = (ko === "z" ? this.zmax : this.ymax) + off;
+    const moment = Nn => {
+      const Ac = (this.A - Nn / fyd) / 2;
+      if (Ac <= 0 || Ac >= this.A) return 0;                  // Querschnitt vollständig auf Zug bzw. Druck
+      let a = lo, b = hi;
+      for (let i = 0; i < 50; i++) { const m = (a + b) / 2; if (this.bis(ko, m).A < Ac) a = m; else b = m; }
+      const g = (a + b) / 2, r = this.bis(ko, g);
+      return Math.abs(2 * fyd * (r.S - r.A * (g - off)));
+    };
+    return Math.min(moment(N), moment(-N));
+  }
+
+  /**
+   * Angaben für die plastischen Nachweise (EN 1993-1-1, 6.2.8 bis 6.2.10):
+   * {art: 'I'|'U'|'RHS'|'CHS'|'voll', b, h, tf, tw, t}; null = allgemeine Form (numerische Auswertung).
+   */
+  nachweisdaten() { return null; }
+
+  /**
    * Plastische Nulllinie und plastisches Widerstandsmoment (reine Biegung, N = 0).
    * Die plastische Nulllinie teilt die Fläche in zwei gleich große Hälften.
    * @param {string} achse 'y' = Biegung um y (waagerechte Nulllinie), 'z' = Biegung um z (senkrechte Nulllinie)
@@ -412,12 +453,7 @@ class Querschnitt {
     const lo = (ko === "z" ? this.zmin : this.ymin) + off;   // Grenzen in lokalen Koordinaten
     const hi = (ko === "z" ? this.zmax : this.ymax) + off;
 
-    // Fläche A und statisches Moment S aller Teile mit Koordinate < g
-    const bis = g => {
-      let A = 0, S = 0;
-      for (const t of this.teile) { const r = t.anteil(ko, g); A += t.vz * r.A; S += t.vz * r.S; }
-      return { A, S };
-    };
+    const bis = g => this.bis(ko, g);
 
     // Nulllinie so bestimmen, dass beide Hälften gleich groß sind (Intervallhalbierung)
     const halbe = bis(hi + 1).A / 2;
@@ -492,6 +528,7 @@ class Rechteck extends Querschnitt {
   erzeugeTeile() { return [new RechteckTeil(0, 0, this.w.b, this.w.h)]; }
   klassen() { return Klassifizierung.vollquerschnitt(); }
   schubflaechen() { return { z: this.A, y: this.A, hinweis: "Rechteck: A<sub>v</sub> vereinfacht = A." }; }
+  nachweisdaten() { return { art: "voll", b: this.w.b, h: this.w.h }; }
 }
 
 class TQuerschnitt extends Querschnitt {
@@ -557,6 +594,7 @@ class DoppelT extends Querschnitt {
     const { h, tf, tw } = this.w, hw = h - 2 * tf;
     return { z: hw * tw, y: this.A - hw * tw, hinweis: "Geschweißter Doppel-T: A<sub>v,z</sub> = h<sub>w</sub>·t<sub>w</sub> (η = 1,0)." };
   }
+  nachweisdaten() { const { b, h, tf, tw } = this.w; return { art: "I", b, h, tf, tw }; }
 }
 
 class Kasten extends Querschnitt {
@@ -587,6 +625,7 @@ class Kasten extends Querschnitt {
     const { h, t } = this.w, hw = h - 2 * t;
     return { z: 2 * hw * t, y: this.A - 2 * hw * t, hinweis: "Geschweißter Kasten: A<sub>v</sub> nach EN 1993-1-1, 6.2.6(3) d), e)." };
   }
+  nachweisdaten() { const { b, h, t } = this.w; return { art: "RHS", b, h, t }; }
 }
 
 class Kreis extends Querschnitt {
@@ -594,6 +633,7 @@ class Kreis extends Querschnitt {
   static get felder() { return [{ id: "d", label: "Durchmesser d [mm]", wert: 300 }]; }
   erzeugeTeile() { return [new KreisTeil(this.w.d / 2, this.w.d / 2, this.w.d)]; }
   klassen() { return Klassifizierung.vollquerschnitt(); }
+  nachweisdaten() { return { art: "voll", b: this.w.d, h: this.w.d }; }
 }
 
 class Rohr extends Querschnitt {
@@ -615,6 +655,7 @@ class Rohr extends Querschnitt {
   }
   klassen(fy) { return Klassifizierung.rohr(this.w.d, this.w.t, Klassifizierung.eps(fy)); }
   schubflaechen() { return { z: 2 * this.A / Math.PI, y: 2 * this.A / Math.PI, hinweis: "Rohr: A<sub>v</sub> = 2A/π." }; }
+  nachweisdaten() { return { art: "CHS", b: this.w.d, h: this.w.d, t: this.w.t }; }
 }
 
 /* ======================= Frei eingegebene Polygone ======================= */

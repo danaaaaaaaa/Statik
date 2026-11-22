@@ -28,7 +28,7 @@ input, select { padding: .4rem .5rem; border: 1px solid #aab; border-radius: 6px
 .knopf:hover { background: var(--blau); color: #fff; }
 .knoepfe { display: flex; gap: .4rem; margin-bottom: .5rem; flex-wrap: wrap; }
 
-canvas { width: 100%; height: 520px; background: var(--grau); border: 1px solid var(--rand); border-radius: 6px; touch-action: none; display: block; }
+canvas { width: 100%; height: 400px; background: var(--grau); border: 1px solid var(--rand); border-radius: 6px; touch-action: none; display: block; }
 
 table { border-collapse: collapse; width: 100%; font-size: .85rem; }
 th, td { border-bottom: 1px solid var(--rand); padding: .3rem .4rem; text-align: right; }
@@ -106,3 +106,15 @@ textarea { width: 100%; padding: .4rem .5rem; border: 1px solid #aab; border-rad
 .balken { height: .7rem; background: #e3e7ec; border-radius: 4px; overflow: hidden; margin: .25rem 0 .1rem; }
 .balken > i { display: block; height: 100%; background: #2e8b57; }
 .balken > i.zu-viel { background: #c0392b; }
+
+/* ---------- Seitenaufbau Stahlbau (Version 3) ---------- */
+.raster3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.zweispaltig + .zweispaltig { margin-top: 1.2rem; }
+.zweispaltig > div > h2:first-child { margin-top: 0; }
+.skizzenbox canvas { height: 300px; }
+#canvas3d { height: 300px; }              /* 3D-Fenster bewusst klein */
+.knopf.aktiv { background: var(--blau); color: #fff; }
+.knoepfe .knopf { padding: .35rem .6rem; }
+.knoepfe .trenner { width: 1px; background: var(--rand); margin: 0 .2rem; }
+@media (max-width: 1100px) { .skizzenbox { order: -1; } }
+@media (max-width: 600px) { #canvas3d { height: 280px; } }

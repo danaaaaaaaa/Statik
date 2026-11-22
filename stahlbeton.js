@@ -4,7 +4,8 @@
  * stahlbeton.js - Biegebemessung im Stahlbetonbau nach DIN EN 1992-1-1 mit DE-NA.
  *
  * Annahmen:
- *  - Rechteckiger Spannungsblock (EC 2, 3.1.7) mit lambda und eta
+ *  - Betonarbeitslinie wählbar: Parabel-Rechteck-Diagramm (EC 2, 3.1.7(1), numerische Integration über
+ *    die Druckzone) oder rechteckiger Spannungsblock (EC 2, 3.1.7(3)) mit lambda und eta
  *  - fcd = alpha_cc * fck / gamma_c mit alpha_cc = 0,85 (NA DE), gamma_c = 1,5
  *  - Betonstahl B500B, Stahlspannungs-Dehnungs-Linie bilinear mit horizontalem Ast
  *  - Reine Biegung (NEd = 0), Grundkombination (gamma_s = 1,15)
@@ -40,6 +41,15 @@ class Beton {
   get eta() { return this.fck <= 50 ? 1.0 : 1.0 - (this.fck - 50) / 200; }
   /** Bruchstauchung epsilon_cu2 in Promille */
   get epsCu2() { return this.fck <= 50 ? 3.5 : 2.6 + 35 * Math.pow((90 - this.fck) / 100, 4); }
+  /** Parabel-Rechteck-Diagramm (EC 2, Tab. 3.1): Exponent n und Stauchung epsilon_c2 [‰] */
+  get nPR() { return this.fck <= 50 ? 2.0 : 1.4 + 23.4 * Math.pow((90 - this.fck) / 100, 4); }
+  get epsC2() { return this.fck <= 50 ? 2.0 : 2.0 + 0.085 * Math.pow(this.fck - 50, 0.53); }
+  /** Betondruckspannung [N/mm²] bei der Stauchung eps [‰] (Druck positiv), Parabel-Rechteck (EC 2, Gl. 3.17/3.18) */
+  sigmaPR(eps) {
+    if (eps <= 0) return 0;
+    if (eps >= this.epsC2) return this.fcd;
+    return this.fcd * (1 - Math.pow(1 - eps / this.epsC2, this.nPR));
+  }
   /** Grenzwert x/d */
   get xiLim() { return this.fck <= 50 ? 0.45 : 0.35; }
 }
@@ -90,9 +100,10 @@ class Biegebemessung {
 
   /**
    * @param {number} MEd Bemessungsmoment [kNm]; positiv = Zug unten, negativ = Zug oben
+   * @param {string} modus 'pr' = Parabel-Rechteck-Diagramm, 'block' = rechteckiger Spannungsblock
    * @returns {Object} Ergebnis (Längen in mm, Flächen in mm²)
    */
-  bemesse(MEd) {
+  bemesse(MEd, modus = "pr") {
     const { q, beton: bt, stahl: st } = this;
     const negativ = MEd < 0;
     const M = Math.abs(MEd) * 1e6;                       // [Nmm]
@@ -102,7 +113,7 @@ class Biegebemessung {
     const lam = bt.lambda;
 
     const res = {
-      negativ, istT, d, hinweise: [], fehler: null,
+      negativ, istT, d, modus, hinweise: [], fehler: null,
       fcd: bt.fcd, fyd: st.fyd, lambda: lam, eta: bt.eta, epsCu2: bt.epsCu2, xiLim: bt.xiLim,
     };
 
@@ -119,8 +130,28 @@ class Biegebemessung {
       return { F: Ff + Fw, M: Ff * (d - q.hf / 2) + Fw * (d - s / 2) };
     };
 
+    /** Stauchung am Druckrand [‰]: Bereich 3 = eps_cu2, Bereich 2 (Stahl bei eps_ud) kleiner */
+    const epsTop = x => Math.min(bt.epsCu2, EPS_UD * x / (d - x));
+
+    /**
+     * Parabel-Rechteck: Betondruckkraft F und Moment M (um die Zugbewehrung) bei Druckzonenhöhe x,
+     * numerische Integration (Mittelpunktsregel) über die Druckzone; Plattenbalken mit Gurtbreite im Gurt.
+     */
+    const druckPR = (x) => {
+      const n = 400, dz = x / n, et = epsTop(x);
+      let F = 0, M = 0;
+      for (let i = 0; i < n; i++) {
+        const z = (i + 0.5) * dz;                                   // Abstand vom Druckrand
+        const sig = bt.sigmaPR(et * (1 - z / x));
+        const dF = sig * (istT && z <= q.hf ? q.bf : q.b) * dz;
+        F += dF; M += dF * (d - z);
+      }
+      return { F, M };
+    };
+    const druckModell = modus === "pr" ? druckPR : druck;          // gewählte Arbeitslinie
+
     const xLim = bt.xiLim * d;
-    const lim = druck(xLim);
+    const lim = druckModell(xLim);
     let x, As1, As2 = 0;
 
     if (M <= lim.M) {
@@ -128,10 +159,10 @@ class Biegebemessung {
       let lo = 0, hi = xLim;
       for (let i = 0; i < 80; i++) {
         const mid = (lo + hi) / 2;
-        if (druck(mid).M < M) lo = mid; else hi = mid;
+        if (druckModell(mid).M < M) lo = mid; else hi = mid;
       }
       x = (lo + hi) / 2;
-      As1 = druck(x).F / st.fyd;
+      As1 = druckModell(x).F / st.fyd;
       res.fall = "Einfach bewehrt";
     } else {
       // Druckbewehrung erforderlich: Betonanteil bei x = x_lim, Rest über Druckbewehrung
@@ -149,7 +180,10 @@ class Biegebemessung {
       res.hinweise.push("Verdrängter Beton im Bereich der Druckbewehrung wird vernachlässigt.");
     }
 
-    res.x = x; res.xi = x / d; res.s = lam * x;
+    res.x = x; res.xi = x / d;
+    res.sBlock = lam * x;                                           // Höhe des Spannungsblocks
+    res.s = modus === "pr" ? x : lam * x;                           // Höhe der Druckzone im gewählten Modell
+    res.Fc = druckModell(x).F;                                      // Betondruckkraft [N]
 
     // ---- Dehnungsebene: Bereich 2 (Stahl bei eps_ud) oder Bereich 3 (Beton bei eps_cu2) ----
     // Dehnungen linear über die Höhe, Abstand zc vom Druckrand; Zug positiv, Druck negativ.
@@ -169,15 +203,22 @@ class Biegebemessung {
         epsS1: eps(d), fliesst: eps(d) >= epsYd - 1e-9,
       };
       // Spannungen der Bewehrung aus den Dehnungen (bilineare Linie mit horizontalem Ast)
+      // Betonspannungen über die Druckzone: Parabel-Rechteck-Verlauf aus der Dehnungsebene (40 Stützstellen)
+      const et = epsTop(x), pr = [];
+      for (let i = 0; i <= 40; i++) { const z = x * i / 40; pr.push({ z, sig: bt.sigmaPR(et * (1 - z / x)) }); }
       res.spannung = {
-        sigC: bt.eta * bt.fcd,                                          // Betondruckspannung im Spannungsblock
+        sigC: bt.eta * bt.fcd,                                          // Spannungsblock
+        sigCmax: modus === "pr" ? bt.sigmaPR(et) : bt.eta * bt.fcd,     // größte Betonspannung (Druckrand) im gewählten Modell
+        pr, epsTop: et,
         sigS1: Math.min(eps(d) / 1000 * st.Es, st.fyd),                 // Zugbewehrung
-        sigS2: As2 > 0 ? res.sigS2 : 0,                                     // Druckbewehrung
+        sigS2: As2 > 0 ? res.sigS2 : 0,                                 // Druckbewehrung
       };
-      if (bereich2) res.hinweise.push("Bereich 2: Stahldehnung auf 25 ‰ begrenzt, der Beton ist nicht voll ausgenutzt (Spannungsblock bleibt als Näherung).");
+      if (bereich2) res.hinweise.push(modus === "pr"
+        ? "Bereich 2: Stahldehnung auf 25 ‰ begrenzt, die Betonstauchung am Druckrand bleibt unter ε_cu2."
+        : "Bereich 2: Stahldehnung auf 25 ‰ begrenzt, der Beton ist nicht voll ausgenutzt (Spannungsblock bleibt als Näherung).");
     }
     res.druckzone = !istT ? "Rechteck-Druckzone"
-      : (lam * x <= q.hf ? "Druckzone im Gurt (wie Rechteck mit b_eff)" : "Druckzone reicht in den Steg");
+      : (res.s <= q.hf ? "Druckzone im Gurt (wie Rechteck mit b_eff)" : "Druckzone reicht in den Steg");
 
     // Mindest- und Höchstbewehrung (EC 2, 9.2.1.1), b_t = Stegbreite bzw. Breite
     res.AsMin = Math.max(0.26 * bt.fctm / st.fyk * q.b * d, 0.0013 * q.b * d);

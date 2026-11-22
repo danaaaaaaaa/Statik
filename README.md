@@ -39,3 +39,13 @@ unter gleichem Namen erneut hochladen. Danach 1–2 Minuten warten und die Seite
 - Die Ergebnisse ersetzen keine geprüfte statische Berechnung.
 - Annahmen der Stahlbetonbemessung: reine Biegung (NEd = 0), Spannungsblock, αcc = 0,85, B500B, Betonklassen bis C50/60, ξ ≤ 0,45.
 - Normverweise (Info-Fenster) beziehen sich auf die 1. Generation der Eurocodes mit NA (DIN EN 1992-1-1:2011-01, DIN EN 1993-1-1:2010-12); bitte mit der eingeführten Fassung abgleichen.
+
+## Version 3 – Ergänzungen
+
+**Stahlbau (eine Seite):** links Eingabe (Querschnitt, Stahlgüte, Schnittgrößen N, Vy, Vz, My, Mz, Punkte); daneben Querschnittswerte und Skizze; darunter Spannungen (mit 3D-Ansicht, kleiner als zuvor) und Tragfähigkeit.
+- W_el steht nur noch bei den Querschnittswerten, die Tragfähigkeit zeigt nur Widerstände (M_el,Rd, M_pl,Rd, M_c,Rd, V_pl,Rd, N_pl,Rd).
+- **Querkraft:** Schubspannung τ nach Jourawski (numerisch für beliebige Querschnitte), Vergleichsspannung σ_v = √(σ²+3τ²), Nachweis σ_v ≤ f_yd. Dargestellt wird wahlweise σ, τ oder σ_v.
+- **Plastischer Nachweis E-P** (nur Klasse 1/2): V/V_pl,Rd, Abminderung ρ, M_V,Rd, M_N,Rd (Normalkraft), M_N,V,Rd und zweiachsige Interaktion.
+- Vereinfachungen: Jourawski ist eine Näherung (keine Torsion, kein Schubmittelpunkt); M_N,V = M_N·M_V/M_pl; für allgemeine Querschnitte α = β = 1. Eurocode-Gleichungsnummern beziehen sich auf die 1. Generation und sind zu prüfen.
+
+**Massivbau:** Betonarbeitslinie wählbar (Parabel-Rechteck-Diagramm oder Spannungsblock); der Spannungsverlauf zeigt das Parabel-Rechteck-Diagramm, der Block gestrichelt zum Vergleich.
