@@ -143,3 +143,5 @@ h3.unter { font-size: .95rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid v
 @media (max-width: 1100px) {
   .zeile-a { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sk" "qw" "kl"; }
 }
+.sg-uebernahme { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .5rem 0; }
+.sg-uebernahme select { width: auto; min-width: 8rem; }

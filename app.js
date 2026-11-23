@@ -593,10 +593,11 @@ class StahlbauSeite {
     document.getElementById("st-gm0").addEventListener("input", () => this.aktualisiere());
     // Schnittgrößen gehören zum Reiter: Änderung wird im aktiven Reiter gespeichert
     for (const id of SchnittgroessenIds) document.getElementById(id).addEventListener("input", () => this.wahl.cb());
-    // Schnittgrößen aus Reiter 1 in den aktuellen Reiter kopieren
+    // Schnittgrößen aus einem wählbaren anderen Reiter in den aktuellen Reiter kopieren
     document.getElementById("sg-uebernehmen").addEventListener("click", () => {
-      const z = this.wahl.slots && this.wahl.slots[0] && this.wahl.slots[0].zusatz;
-      if (z && this.wahl.aktiv !== 0) { this.wahl.zusatz.setzen(z); this.wahl.cb(); }
+      const i = Number(document.getElementById("sg-quelle").value);
+      const z = this.wahl.slots[i] && this.wahl.slots[i].zusatz;
+      if (z && i !== this.wahl.aktiv) { this.wahl.zusatz.setzen(z); this.wahl.cb(); }
     });
     this.aktualisiere();
   }
@@ -614,8 +615,7 @@ class StahlbauSeite {
     const fy = STAHLGUETEN.find(s => s[0] === name)[1];
     const gm0 = zahl("st-gm0") > 0 ? zahl("st-gm0") : 1;
     const [N, Vy, Vz, My, Mz] = SchnittgroessenIds.map(zahl);
-    const knopf = document.getElementById("sg-uebernehmen");        // nur sinnvoll, wenn nicht Reiter 1 aktiv ist
-    knopf.disabled = this.wahl.aktiv === 0 || !(this.wahl.slots && this.wahl.slots[0] && this.wahl.slots[0].zusatz);
+    this._quellReiter();
 
     const r = new Stahlbemessung(q, fy, gm0).berechne();
     const ep = new PlastischerNachweis(q, fy, gm0, r).berechne(N, Vy, Vz, My, Mz);
@@ -633,6 +633,15 @@ class StahlbauSeite {
     document.getElementById("sp-titel").textContent = plastisch ? "Spannungen (elastisch-plastisch, E-P)" : "Spannungen (elastisch, E-E)";
     this.spannung.zeige(q, sp, schub, fy / gm0, ep);
     this.skizze.zeichne(q, { pna: { y: r.z.lage, z: r.y.lage } });
+  }
+
+  /** Auswahl der Quell-Reiter für die Übernahme: alle anderen Reiter, die Schnittgrößen gespeichert haben. */
+  _quellReiter() {
+    const sel = document.getElementById("sg-quelle"), alt = sel.value, w = this.wahl;
+    const frei = (w.slots || []).map((z, i) => (z && z.zusatz && i !== w.aktiv ? i : -1)).filter(i => i >= 0);
+    sel.innerHTML = frei.map(i => `<option value="${i}">aus Reiter ${i + 1}</option>`).join("");
+    if (frei.map(String).includes(alt)) sel.value = alt;
+    sel.disabled = document.getElementById("sg-uebernehmen").disabled = !frei.length;
   }
 
   /** Schalter E-E / E-P aktualisieren: E-P ist bei Klasse 3/4 oder unbekannter Klasse gesperrt. */

@@ -63,7 +63,10 @@
         <p class="hinweis">y nach rechts, z nach unten, Ursprung im Schwerpunkt. N &gt; 0: Zug. M<sub>y</sub> &gt; 0: Zug unten.
           M<sub>z</sub> &gt; 0: Zug rechts. V<sub>z</sub> wirkt parallel zum Steg, V<sub>y</sub> parallel zu den Flanschen
           (nur der Betrag geht in die Nachweise ein).</p>
-        <p><button type="button" class="knopf" id="sg-uebernehmen">Schnittgrößen aus Reiter 1 übernehmen</button></p>
+        <div class="sg-uebernahme">
+          <select id="sg-quelle" aria-label="Quell-Reiter"></select>
+          <button type="button" class="knopf" id="sg-uebernehmen">Schnittgrößen übernehmen</button>
+        </div>
 
         <h2>Berechnungsart <button type="button" class="info" data-info="berechnungsart">i</button></h2>
         <div class="knoepfe" id="st-modus">
