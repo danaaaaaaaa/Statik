@@ -331,7 +331,7 @@ class Querschnitt {
   static get gruppe() { return "Parametrische Querschnitte"; }
   /**
    * Eingabefelder (in Unterklassen überschreiben):
-   * {id, label, wert} für Zahlenfelder, zusätzlich {optionen: [...]} für eine Auswahlliste.
+   * {id, label, wert} für Zahlenfelder (nullErlaubt: true erlaubt auch 0), zusätzlich {optionen: [...]} für eine Auswahlliste.
    */
   static get felder() { return []; }
 
@@ -339,7 +339,7 @@ class Querschnitt {
   pruefe() {
     for (const f of this.constructor.felder) {
       if (f.optionen || f.text) continue; // Auswahl- und Textfelder prüfen die Unterklassen selbst
-      if (!(this.w[f.id] > 0)) return `${f.label} muss größer 0 sein.`;
+      if (f.nullErlaubt ? !(this.w[f.id] >= 0) : !(this.w[f.id] > 0)) return `${f.label} muss größer 0 sein.`;
     }
     return null;
   }
@@ -793,7 +793,7 @@ class GeschweisstTraeger extends Querschnitt {
       { id: "modus", label: "Stegverteilung", optionen: ["Gleichmäßig", "Einzeln (Sonderfall)"], wert: "Gleichmäßig", info: "stege" },
       { id: "nw", label: "Anzahl Stege n [–]", wert: 1, zeigeWenn: gl },
       { id: "tw", label: "Stegdicke t_w [mm]", wert: 8, zeigeWenn: gl },
-      { id: "sa", label: "Stegabstand a [mm] (0 = gleichmäßig über Gurtbreite)", wert: 0, zeigeWenn: w => gl(w) && w.nw > 1 },
+      { id: "sa", label: "Stegabstand a [mm] (0 = gleichmäßig über Gurtbreite)", wert: 0, nullErlaubt: true, zeigeWenn: w => gl(w) && w.nw > 1 },
       { id: "stege", text: true, zeilen: 3, zeigeWenn: w => !gl(w),
         label: "Stege einzeln: Lage y (Stegmitte, von der linken Gurtkante) und Dicke t [mm], eine Zeile je Steg", wert: "100 8" },
     ];
