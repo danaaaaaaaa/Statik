@@ -793,6 +793,7 @@ class GeschweisstTraeger extends Querschnitt {
       { id: "modus", label: "Stegverteilung", optionen: ["Gleichmäßig", "Einzeln (Sonderfall)"], wert: "Gleichmäßig", info: "stege" },
       { id: "nw", label: "Anzahl Stege n [–]", wert: 1, zeigeWenn: gl },
       { id: "tw", label: "Stegdicke t_w [mm]", wert: 8, zeigeWenn: gl },
+      { id: "sa", label: "Stegabstand a [mm] (0 = gleichmäßig über Gurtbreite)", wert: 0, zeigeWenn: w => gl(w) && w.nw > 1 },
       { id: "stege", text: true, zeilen: 3, zeigeWenn: w => !gl(w),
         label: "Stege einzeln: Lage y (Stegmitte, von der linken Gurtkante) und Dicke t [mm], eine Zeile je Steg", wert: "100 8" },
     ];
@@ -812,21 +813,23 @@ class GeschweisstTraeger extends Querschnitt {
   }
 
   /** Stege gleichmäßig über die Breite des schmaleren Gurts verteilen: 1 mittig, 2 in den Drittelspunkten, 3 in den Viertelspunkten ... */
-  static verteile(n, t, bmin) {
+  static verteile(n, t, bmin, a = 0) {
+    if (a > 0) return Array.from({ length: n }, (_, i) => ({ y: (i - (n - 1) / 2) * a, t }));   // fester Achsabstand a, symmetrisch zur Mitte
     return Array.from({ length: n }, (_, i) => ({ y: -bmin / 2 + (i + 1) * bmin / (n + 1), t }));
   }
 
   pruefe() {
     const f = super.pruefe(); if (f) return f;
     const { bo, to, bu, tu, h } = this.w;
-    if (to + tu >= h) return "Die Gurtdicken müssen zusammen kleiner als die Höhe sein.";
+    if (to + tu >= h) return `Die Gurtdicken (t_o + t_u = ${to + tu} mm) müssen kleiner als die Gesamthöhe (h = ${h} mm) sein.`;
+    this._h = h;
     const bmin = Math.min(bo, bu), B = Math.max(bo, bu);
     let s;
     if (this.w.modus === "Gleichmäßig") {
       const n = Math.round(this.w.nw);
       if (!(n >= 1 && n <= 20)) return "Die Anzahl der Stege muss zwischen 1 und 20 liegen.";
       if (!(this.w.tw > 0)) return "Die Stegdicke muss größer als null sein.";
-      s = GeschweisstTraeger.verteile(n, this.w.tw, bmin);
+      s = GeschweisstTraeger.verteile(n, this.w.tw, bmin, n > 1 ? Math.max(0, this.w.sa || 0) : 0);
     } else {
       s = GeschweisstTraeger.parseStege(this.w.stege).map(x => ({ y: x.y - B / 2, t: x.t }));   // auf die Symmetrieachse beziehen
       if (!s.length) return "Bitte mindestens einen Steg angeben.";
@@ -840,7 +843,7 @@ class GeschweisstTraeger extends Querschnitt {
   }
 
   erzeugeTeile() {
-    const { bo, to, bu, tu, h } = this.w, B = Math.max(bo, bu), hw = h - to - tu;
+    const { bo, to, bu, tu } = this.w, h = this._h, B = Math.max(bo, bu), hw = h - to - tu;
     const teile = [new RechteckTeil((B - bo) / 2, 0, bo, to), new RechteckTeil((B - bu) / 2, h - tu, bu, tu)];
     for (const s of this._stege) teile.push(new RechteckTeil(B / 2 + s.y - s.t / 2, to, s.t, hw));
     return teile;
@@ -862,7 +865,7 @@ class GeschweisstTraeger extends Querschnitt {
 
   // Beide Gurte werden als gedrückt betrachtet (Vorzeichen des Moments ist hier nicht bekannt): konservativ.
   klassen(fy) {
-    const { bo, to, bu, tu, h } = this.w, eps = Klassifizierung.eps(fy), K = Klassifizierung, d = h - to - tu;
+    const { bo, to, bu, tu } = this.w, eps = Klassifizierung.eps(fy), K = Klassifizierung, d = this._h - to - tu;
     const gurte = [...this._gurtteile(bo, to, "Obergurt", eps), ...this._gurtteile(bu, tu, "Untergurt", eps)];
     const stegB = this._stege.map((s, i) => ({ name: `Steg ${i + 1}`, ...K.teil(d / s.t, K.STEG_BIEGUNG, eps) }));
     const stegD = this._stege.map((s, i) => ({ name: `Steg ${i + 1}`, ...K.teil(d / s.t, K.INNEN_DRUCK, eps) }));
@@ -877,13 +880,13 @@ class GeschweisstTraeger extends Querschnitt {
 
   // Schubfläche: A_v,z = Σ h_w·t_w (η = 1,0), A_v,y = A − Σ h_w·t_w
   schubflaechen() {
-    const hw = this.w.h - this.w.to - this.w.tu, Aw = hw * this._stege.reduce((a, s) => a + s.t, 0);
+    const hw = this._h - this.w.to - this.w.tu, Aw = hw * this._stege.reduce((a, s) => a + s.t, 0);
     return { z: Aw, y: this.A - Aw, hinweis: "Geschweißter Träger: A<sub>v,z</sub> = Σ h<sub>w</sub>·t<sub>w</sub> (η = 1,0)." };
   }
 
   // Formeln der EN 1993-1-1 gibt es nur für symmetrische Sonderfälle (I bzw. Kasten); sonst numerisch (α = β = 1).
   nachweisdaten() {
-    const { bo, to, bu, tu, h } = this.w, s = this._stege;
+    const { bo, to, bu, tu } = this.w, h = this._h, s = this._stege;
     if (bo === bu && to === tu && s.length === 1 && Math.abs(s[0].y) < 1e-9) return { art: "I", b: bo, h, tf: to, tw: s[0].t };
     if (bo === bu && to === tu && s.length === 2 && s[0].t === s[1].t && s[0].t === to && Math.abs(s[0].y + s[1].y) < 1e-9
         && Math.abs(Math.abs(s[0].y) + s[0].t / 2 - bo / 2) < 1e-9) return { art: "RHS", b: bo, h, t: to };

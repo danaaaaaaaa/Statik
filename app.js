@@ -168,7 +168,7 @@ class QuerschnittWahl {
       } else {
         el = document.createElement("input");
         el.type = "number"; el.step = "any"; el.value = f.wert;
-        el.addEventListener("input", () => this.cb());
+        el.addEventListener("input", () => { this._sichtbarkeit(); this.cb(); });
       }
       el.id = `${this.box.id}-${f.id}`;
       label.id = `${el.id}-label`;

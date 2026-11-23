@@ -166,7 +166,7 @@ const INFO = {
     titel: "Geschweißter Träger: Stege",
     formeln: ["Gleichmäßig: Steg i bei y<sub>i</sub> = i·b/(n+1) von der Gurtkante (b = schmalerer Gurt)", "A<sub>v,z</sub> = Σ h<sub>w</sub>·t<sub>w</sub> &nbsp;(h<sub>w</sub> = h − t<sub>o</sub> − t<sub>u</sub>)"],
     text: "Standard: Anzahl und Dicke der Stege eingeben; die Stege werden gleichmäßig verteilt (1 Steg mittig, 2 Stege in den Drittelspunkten, 3 in den Viertelspunkten usw.). " +
-      "Sonderfall „Einzeln“: je Zeile ein Steg mit Lage y (Stegmitte, gemessen von der linken Kante des breiteren Gurts) und Dicke t. " +
+      "Mit Stegabstand a &gt; 0 werden die Stege stattdessen im Achsabstand a symmetrisch zur Mitte angeordnet (a = 0: gleichmäßig). Sonderfall „Einzeln“: je Zeile ein Steg mit Lage y (Stegmitte, gemessen von der linken Kante des breiteren Gurts) und Dicke t. " +
       "Beispiel Kasten 200 mm breit mit 10 mm Wänden: „5 10“ und „195 10“. Obergurt und Untergurt können unterschiedliche Breite und Dicke haben. " +
       "Die Stege müssen innerhalb des schmaleren Gurtes liegen und dürfen sich nicht überlappen. " +
       "Klassifizierung: Gurtüberstände (einseitig gestützt) und Gurtfelder zwischen den Stegen (beidseitig gestützt) einzeln; beide Gurte werden vereinfachend als gedrückt angenommen.",
