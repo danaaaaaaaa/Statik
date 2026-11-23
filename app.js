@@ -43,10 +43,13 @@ class QuerschnittWahl {
    * @param {Function} beiAenderung Rückruf bei jeder Änderung
    * @param {string} start Schlüssel des vorgewählten Querschnitts (optional)
    */
-  constructor(selectId, felderId, beiAenderung, start = null) {
+  constructor(selectId, felderId, beiAenderung, start = null, slotsId = null) {
     this.sel = document.getElementById(selectId);
     this.box = document.getElementById(felderId);
-    this.cb = beiAenderung;
+    this.slotBox = slotsId ? document.getElementById(slotsId) : null;
+    this.beiAenderung = beiAenderung;
+    // jede Änderung wird zuerst im aktiven Slot gespeichert, dann weitergegeben
+    this.cb = () => { this._speichere(); this.beiAenderung(); };
 
     // Auswahlliste nach Gruppen (parametrisch / frei / Walzprofile) aufbauen
     const gruppen = {};
@@ -62,6 +65,77 @@ class QuerschnittWahl {
 
     this.sel.addEventListener("change", () => { this.baueFelder(); this.cb(); });
     this.baueFelder();
+    if (this.slotBox) this._initSlots();
+  }
+
+  /* ---------- Speicherslots: mehrere Querschnittseingaben, zwischen denen man wechseln kann ---------- */
+
+  static get SLOTS() { return 6; }
+
+  /** Slots aus dem lokalen Speicher laden und Knöpfe aufbauen. */
+  _initSlots() {
+    this.schluessel = `statik-qs-slots-${this.box.id}`;
+    this.slots = Array(QuerschnittWahl.SLOTS).fill(null);
+    this.aktiv = 0;
+    try {
+      const d = JSON.parse(localStorage.getItem(this.schluessel) || "null");
+      if (d && Array.isArray(d.slots)) { this.slots = d.slots.slice(0, QuerschnittWahl.SLOTS); this.aktiv = d.aktiv || 0; }
+    } catch (e) { /* Speicher nicht verfügbar: Slots gelten nur für diese Sitzung */ }
+    while (this.slots.length < QuerschnittWahl.SLOTS) this.slots.push(null);
+    this.slotBox.innerHTML = "";
+    for (let i = 0; i < QuerschnittWahl.SLOTS; i++) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "knopf slot"; b.textContent = i + 1;
+      b.addEventListener("click", () => this.wechsle(i));
+      this.slotBox.appendChild(b);
+    }
+    if (this.slots[this.aktiv]) this._lade(this.slots[this.aktiv]); else this._speichere();
+    this._slotAnzeige();
+  }
+
+  /** Aktuelle Eingabe als Zustand {typ, werte}. */
+  _zustand() {
+    const werte = {};
+    for (const f of this.klasse.felder) werte[f.id] = document.getElementById(`${this.box.id}-${f.id}`).value;
+    return { typ: this.sel.value, werte };
+  }
+
+  /** Zustand in die Felder schreiben. */
+  _lade(z) {
+    if (!QUERSCHNITTE[z.typ]) return;
+    this.sel.value = z.typ;
+    this.baueFelder();
+    for (const [id, v] of Object.entries(z.werte || {})) {
+      const el = document.getElementById(`${this.box.id}-${id}`);
+      if (el) el.value = v;
+    }
+  }
+
+  /** Aktuelle Eingabe im aktiven Slot ablegen. */
+  _speichere() {
+    if (!this.slots) return;
+    this.slots[this.aktiv] = this._zustand();
+    try { localStorage.setItem(this.schluessel, JSON.stringify({ slots: this.slots, aktiv: this.aktiv })); } catch (e) { /* ignorieren */ }
+    this._slotAnzeige();
+  }
+
+  /** Zu Slot i springen; ein leerer Slot startet als Kopie der aktuellen Eingabe. */
+  wechsle(i) {
+    if (i === this.aktiv) return;
+    this._speichere();
+    this.aktiv = i;
+    if (this.slots[i]) this._lade(this.slots[i]);
+    this.cb();                       // speichert (ggf. Kopie) und aktualisiert alle Anzeigen
+  }
+
+  /** Knöpfe: aktiv = ausgefüllt hervorgehoben, belegt = durchgezogener Rand, leer = gestrichelt. */
+  _slotAnzeige() {
+    [...this.slotBox.children].forEach((b, i) => {
+      b.classList.toggle("aktiv", i === this.aktiv);
+      b.classList.toggle("leer", !this.slots[i]);
+      const z = this.slots[i];
+      b.title = z ? `Slot ${i + 1}: ${QUERSCHNITTE[z.typ] ? QUERSCHNITTE[z.typ].titel : z.typ}` : `Slot ${i + 1}: leer (startet als Kopie)`;
+    });
   }
 
   get klasse() { return QUERSCHNITTE[this.sel.value]; }
@@ -228,6 +302,7 @@ class KlassifizierungAnzeige {
     }
     h += "</ul>";
     const kl = ep.klasseMax;
+    if (r.klassen.hinweis) h += `<p class="hinweis">${r.klassen.hinweis}</p>`;
     h += `<p><b>Maßgebende Klasse für die vorhandene Beanspruchung: ${kl}</b> – ` +
       (kl <= 2 ? '<span class="ok">plastische Bemessung (E-P) möglich</span>' : '<span class="fehler">nur elastische Bemessung (E-E)</span>') + "</p>";
     if (kl === 4) h += '<p class="hinweis">Klasse 4: Beulen (wirksamer Querschnitt) wird nicht berechnet.</p>';
@@ -278,6 +353,14 @@ class TragfaehigkeitAnzeige {
     h += zeileN("M<sub>Ed</sub>", fmt(ep.y.M, 1), fmt(ep.z.M, 1), "kNm");
     h += zeileN("M<sub>Ed</sub> / M<sub>N,V,Rd</sub>", fmt(ep.y.M / ep.y.MNV, 3), fmt(ep.z.M / ep.z.MNV, 3), "");
     h += "</table>";
+    const pz = v => (Number.isFinite(v) ? fmt(v * 100, 1) + " %" : "∞");
+    const okz = v => (v <= 1 + 1e-9 ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>');
+    h += "<p><b>Ausnutzungen</b></p><table>";
+    h += zeile("Querkraft V<sub>z</sub> / V<sub>pl,z,Rd</sub>", pz(ep.y.etaV), okz(ep.y.etaV));
+    h += zeile("Querkraft V<sub>y</sub> / V<sub>pl,y,Rd</sub>", pz(ep.z.etaV), okz(ep.z.etaV));
+    h += zeile("Normalkraft N / N<sub>pl,Rd</sub>", pz(ep.n), okz(ep.n));
+    h += zeile("Biegung + N + V (Interaktion)", pz(ep.eta), okz(ep.eta));
+    h += "</table>";
     const ok = ep.etaMax <= 1 + 1e-9;
     const eta = Number.isFinite(ep.eta) ? fmt(ep.eta * 100, 1) + " %" : "∞";
     h += `<p>Interaktion ${infoBtn("interaktion")} (α = ${fmt(ep.alpha, 2)}, β = ${fmt(ep.beta, 2)}): <b>${eta}</b><br>` +
@@ -298,11 +381,62 @@ class TragfaehigkeitAnzeige {
 
 /* ======================= Anzeige: Spannungen ======================= */
 
+/** Klassisches Spannungsdiagramm σ(z) bzw. σ(y) entlang der Schwerachsen (zeigt Fließplateaus bei E-P). */
+class ProfilDiagramm {
+  constructor(canvas) { this.cv = canvas; }
+
+  /** @param sp Spannung oder ElastoPlastischeSpannung, @param {number} fyd [N/mm²] */
+  zeichne(q, sp, fyd) {
+    const { g, w, h } = canvasVorbereiten(this.cv);
+    if (!w || !h) return;
+    const koeff = sp.koeff;
+    const plastisch = sp instanceof ElastoPlastischeSpannung;
+    const tz = Math.abs(koeff.bz) > 1e-9, ty = Math.abs(koeff.by) > 1e-9;
+    const felder = [];
+    if (tz || !ty) felder.push({ name: "z", lo: q.zmin, hi: q.zmax, f: z => sp.sigma(0, z), lin: z => koeff.a0 + koeff.bz * z });
+    if (ty) felder.push({ name: "y", lo: q.ymin, hi: q.ymax, f: y => sp.sigma(y, 0), lin: y => koeff.a0 + koeff.by * y });
+    const smax = Math.max(fyd, ...felder.map(d => Math.max(Math.abs(d.f(d.lo)), Math.abs(d.f(d.hi)))));
+    const bw = w / felder.length;
+    felder.forEach((d, i) => this._panel(g, d, i * bw, bw, h, smax, fyd, plastisch));
+  }
+
+  _panel(g, d, x0, bw, h, smax, fyd, plastisch) {
+    const pad = 26, xm = x0 + bw / 2, sk = (bw / 2 - pad - 8) / smax, hh = h - 2 * pad, k = hh / (d.hi - d.lo);
+    const Y = c => pad + (d.name === "z" ? (c - d.lo) * k : (d.hi - c) * k);   // z nach unten; für y-Achse: Platzhalter vertikal
+    const X = s => xm + s * sk;
+    g.font = "11px system-ui, sans-serif"; g.textAlign = "center";
+    // Grenzen ±fyd und Mittelachse
+    g.setLineDash([5, 4]); g.strokeStyle = "#d9822b"; g.lineWidth = 1;
+    for (const v of [fyd, -fyd]) { g.beginPath(); g.moveTo(X(v), pad - 6); g.lineTo(X(v), h - pad + 6); g.stroke(); }
+    g.setLineDash([]); g.strokeStyle = "#888";
+    g.beginPath(); g.moveTo(xm, pad - 6); g.lineTo(xm, h - pad + 6); g.stroke();
+    g.fillStyle = "#a85d10"; g.fillText("−f_yd", X(-fyd), pad - 10); g.fillText("+f_yd", X(fyd), pad - 10);
+    // ungedeckelter linearer Verlauf (E·ε) gestrichelt
+    if (plastisch) {
+      g.setLineDash([3, 3]); g.strokeStyle = "#999"; g.beginPath();
+      g.moveTo(X(d.lin(d.lo)), Y(d.lo)); g.lineTo(X(d.lin(d.hi)), Y(d.hi)); g.stroke(); g.setLineDash([]);
+    }
+    // Spannungsverlauf als gefüllte Fläche (Zug rot, Druck blau)
+    const n = 120, pts = [];
+    for (let i = 0; i <= n; i++) { const c = d.lo + (d.hi - d.lo) * i / n; pts.push([X(d.f(c)), Y(c), d.f(c)]); }
+    for (let i = 0; i < n; i++) {
+      const [xa, ya, sa] = pts[i], [xb, yb, sb] = pts[i + 1], s = (sa + sb) / 2;
+      g.fillStyle = s >= 0 ? "rgba(220,60,60,.55)" : "rgba(60,90,220,.55)";
+      g.beginPath(); g.moveTo(xm, ya); g.lineTo(xa, ya); g.lineTo(xb, yb); g.lineTo(xm, yb); g.closePath(); g.fill();
+    }
+    g.strokeStyle = "#222"; g.lineWidth = 1.6; g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); g.lineWidth = 1;
+    g.fillStyle = "#222"; g.textAlign = "left";
+    g.fillText(d.name === "z" ? "σ(z) längs der z-Achse (oben → unten)" : "σ(y) längs der y-Achse", x0 + 6, h - 6);
+  }
+}
+
 class SpannungsAnzeige {
   constructor() {
     this.punkte = [];                       // vom Nutzer gesetzte Punkte {y, z}
     this.feld = "sigma";                    // dargestelltes Feld: sigma | tau | v
     this.ansicht = new Ansicht3D(document.getElementById("canvas3d"));
+    this.profil = new ProfilDiagramm(document.getElementById("sp-profil"));
     this.letzte = null;
     document.getElementById("pt-add").addEventListener("click", () => {
       this.punkte.push({ y: zahl("pt-y"), z: zahl("pt-z") });
@@ -329,13 +463,13 @@ class SpannungsAnzeige {
    * @param sp Spannung (E-E, linear) oder ElastoPlastischeSpannung (E-P, nichtlinear) - beide haben dieselbe Schnittstelle
    * @param {number} fyd Bemessungsstreckgrenze [N/mm²]
    */
-  zeige(q, sp, schub, fyd) {
+  zeige(q, sp, schub, fyd, ep) {
     const plastisch = sp instanceof ElastoPlastischeSpannung;
     const felder = { sigma: new Spannungsfeld(sp, schub, "sigma"), tau: new Spannungsfeld(sp, schub, "tau") };
     if (!plastisch) felder.v = new Spannungsfeld(sp, schub, "v");      // σ_v nur für den elastischen Nachweis
     if (plastisch && this.feld === "v") this._setzeFeld("sigma");
     document.querySelector('[data-feld="v"]').style.display = plastisch ? "none" : "";
-    this.letzte = { q, sp, schub, fyd, felder, plastisch };
+    this.letzte = { q, sp, schub, fyd, felder, plastisch, ep };
     this.neuZeichnen();
   }
 
@@ -347,11 +481,15 @@ class SpannungsAnzeige {
 
   neuZeichnen() {
     if (!this.letzte) return;
-    const { q, sp, schub, fyd, felder, plastisch } = this.letzte;
-    if (plastisch) this.nachweisEP(sp, felder, fyd); else this.nachweis(felder, fyd);
+    const { q, sp, schub, fyd, felder, plastisch, ep } = this.letzte;
+    if (plastisch) this.nachweisEP(sp, felder, fyd, ep); else this.nachweis(felder, fyd);
     this.zeigePunkte(q, felder.sigma, schub);
     const grenze = this.feld === "tau" ? fyd / Math.sqrt(3) : fyd;
     this.ansicht.setzeDaten(q, felder[this.feld], this.punkte, grenze);
+    this.profil.zeichne(q, sp, fyd);
+    document.getElementById("sp-profil-hinweis").textContent = plastisch
+      ? "Spannungsdiagramm: durchgezogen = tatsächliche Spannung (an den Rändern auf ±f_yd begrenzt), gestrichelt grau = linear fortgesetzte Dehnungsebene (E·ε)."
+      : "Spannungsdiagramm: linearer Verlauf (E-E); orange gestrichelt: ±f_yd.";
   }
 
   /** Extremwerte und Vergleich mit f_yd (elastischer Nachweis mit der Vergleichsspannung). */
@@ -371,7 +509,8 @@ class SpannungsAnzeige {
   }
 
   /** Zustandsanzeige für E-P: Zustand, Fließanteil, Extremwerte (Nachweis selbst: siehe Tragfähigkeit). */
-  nachweisEP(sp, felder, fyd) {
+  nachweisEP(sp, felder, fyd, ep) {
+    const ok = ep.etaMax <= 1 + 1e-9, ausn = Number.isFinite(ep.etaMax) ? fmt(ep.etaMax * 100, 1) + " %" : "∞";
     const es = felder.sigma.extremwerte(), et = felder.tau.extremwerte();
     const eps = sp.epsMax > 100 ? "> 100" : fmt(sp.epsMax, 2);
     let h = `${nb(`f<sub>yd</sub> = <b>${fmt(fyd, 1)}</b> N/mm²`)} ${infoBtn("berechnungsart")}<br>` +
@@ -379,7 +518,9 @@ class SpannungsAnzeige {
       `${nb(`σ<sub>max</sub> = <b>${fmt(es.max.wert)}</b>`)} ${nb(`σ<sub>min</sub> = <b>${fmt(es.min.wert)}</b> N/mm²`)}<br>` +
       `${nb(`ε<sub>max</sub>/ε<sub>y</sub> = <b>${eps}</b>`)} (größte Randdehnung)<br>` +
       `${nb(`τ<sub>max</sub> = <b>${fmt(et.max.wert)}</b> N/mm²`)} ${infoBtn("tau")} (elastisch)<br>` +
-      `<span class="hinweis">Dehnungsnulllinie ${infoBtn("nulllinie")}</span>`;
+      `<span class="hinweis">Dehnungsnulllinie ${infoBtn("nulllinie")}</span><br>` +
+      `<b>Ausnutzung E-P = ${ausn}</b> ${infoBtn("epNachweis")} ${ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>'}` +
+      `<div class="balken"><i class="${ok ? "" : "zu-viel"}" style="width:${Math.min(100, ep.etaMax * 100) || 0}%"></i></div>`;
     if (sp.ueberlast) h += `<br><span class="fehler">Die Beanspruchung (N, M) übersteigt die Traglast des Querschnitts. Dargestellt ist der Grenzzustand bei ${fmt(sp.lambda * 100, 1)} % der Beanspruchung.</span>`;
     document.getElementById("sp-nachweis").innerHTML = h;
   }
@@ -410,7 +551,7 @@ class StahlbauSeite {
   constructor() {
     this.skizze = new QSkizze(document.getElementById("st-skizze"));
     this.spannung = new SpannungsAnzeige();
-    this.wahl = new QuerschnittWahl("st-typ", "st-felder", () => this.aktualisiere(), "ipe");
+    this.wahl = new QuerschnittWahl("st-typ", "st-felder", () => this.aktualisiere(), "ipe", "st-slots");
 
     const sel = document.getElementById("st-guete");
     STAHLGUETEN.forEach(([name]) => sel.add(new Option(name, name)));
@@ -455,7 +596,7 @@ class StahlbauSeite {
     document.getElementById("kl-ergebnis").innerHTML = KlassifizierungAnzeige.html(r, ep);
     document.getElementById("tf-ergebnis").innerHTML = TragfaehigkeitAnzeige.html(q, r, ep, plastisch);
     document.getElementById("sp-titel").textContent = plastisch ? "Spannungen (elastisch-plastisch, E-P)" : "Spannungen (elastisch, E-E)";
-    this.spannung.zeige(q, sp, schub, fy / gm0);
+    this.spannung.zeige(q, sp, schub, fy / gm0, ep);
     this.skizze.zeichne(q, { pna: { y: r.z.lage, z: r.y.lage } });
   }
 

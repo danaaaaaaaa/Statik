@@ -42,6 +42,7 @@
     <section id="tab-stahlbau" class="seite">
       <div class="eingabe">
         <h2>Querschnitt</h2>
+        <div class="knoepfe slots"><span class="slotname">Slot</span><span id="st-slots" class="knoepfe"></span></div>
         <label><span>Form</span><select id="st-typ"></select></label>
         <div id="st-felder" class="raster"></div>
 
@@ -119,6 +120,8 @@
               <button class="knopf" id="zoom-minus">−</button>
             </div>
             <canvas id="canvas3d"></canvas>
+            <canvas id="sp-profil"></canvas>
+            <p class="hinweis" id="sp-profil-hinweis"></p>
             <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Volle Farbe = Bezugswert (f<sub>yd</sub>, bei τ f<sub>yd</sub>/√3);
               orange gestrichelt: Grenzwert, grün gestrichelt: Nulllinie.</p>
           </div>

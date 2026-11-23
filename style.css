@@ -41,6 +41,11 @@ td button { border: 0; background: none; cursor: pointer; color: #b00020; font-s
 .hinweis { font-size: .78rem; color: #666; margin: .4rem 0; }
 .ergebnis ul { margin: .4rem 0 0; padding-left: 1.2rem; }
 
+/* Desktop: Eingabespalte bleibt beim Scrollen stehen, nur die Ergebnisse scrollen */
+@media (min-width: 821px) {
+  .seite > .eingabe { position: sticky; top: .5rem; max-height: calc(100vh - 1rem); overflow-y: auto; padding-right: .3rem; }
+}
+
 /* Tablet / Handy: einspaltig */
 @media (max-width: 820px) { .seite.aktiv { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {
@@ -120,3 +125,8 @@ textarea { width: 100%; padding: .4rem .5rem; border: 1px solid #aab; border-rad
 @media (max-width: 600px) { #canvas3d { height: 280px; } }
 .knopf:disabled { opacity: .45; cursor: not-allowed; background: #fff; color: var(--blau); }
 .ergebnisse > h2 { margin-top: 1.2rem; }
+#sp-profil { height: 190px; margin-top: .5rem; }
+.knoepfe.slots { align-items: center; margin-bottom: .6rem; }
+.slotname { font-size: .8rem; color: #444; }
+.knopf.slot { padding: .25rem .6rem; min-width: 2rem; }
+.knopf.slot.leer { border-style: dashed; opacity: .75; }

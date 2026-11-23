@@ -714,11 +714,12 @@ class PolygonQuerschnitt extends Querschnitt {
     };
     for (const zeile of String(text).split(/\r?\n/)) {
       const t = zeile.trim();
-      if (!t) { ende(); continue; }
+      if (!t) { ende(); continue; }                       // Leerzeile beginnt eine neue Kontur
       const teile = t.replace(/;/g, " ").replace(/,/g, ".").split(/\s+/).map(Number);   // Komma = Dezimaltrennzeichen
       if (teile.length !== 2 || teile.some(x => !Number.isFinite(x))) throw new Error(`Zeile „${t}“: erwartet werden zwei Zahlen „y z“.`);
       const p = { y: teile[0], z: teile[1] };
       const l = akt[akt.length - 1];
+      if (akt.length >= 3 && akt[0].y === p.y && akt[0].z === p.z) { ende(); continue; }  // Startpunkt erreicht: Kontur geschlossen, nächste beginnt
       if (!l || l.y !== p.y || l.z !== p.z) akt.push(p);                                // doppelte Punkte überspringen
     }
     ende();
@@ -743,7 +744,9 @@ class PolygonQuerschnitt extends Querschnitt {
     const aussen = new PolygonTeil(this._konturen[0]);
     for (let i = 1; i < this._konturen.length; i++) {
       const c = this._konturen[i];
-      if (c.filter(p => !aussen.enthaelt(p.y, p.z)).length > c.length / 2) return `Kontur ${i + 1} (Aussparung) liegt nicht innerhalb der Außenkontur.`;
+      const k0 = Geometrie.kennwerte(c);                               // Aussparungen dürfen den Rand berühren
+      const innen = aussen.enthaelt(k0.y, k0.z) || c.filter(p => aussen.enthaelt(p.y, p.z)).length >= c.length / 2;
+      if (!innen) return `Kontur ${i + 1} (Aussparung) liegt nicht innerhalb der Außenkontur.`;
     }
     let A = 0;
     this._konturen.forEach((c, i) => { A += (i ? -1 : 1) * Geometrie.umfahre(c).A; });
@@ -769,11 +772,112 @@ class PolygonQuerschnitt extends Querschnitt {
   }
 }
 
+/* ======================= Geschweißter Träger mit frei wählbaren Gurten und Stegen ======================= */
+
+/**
+ * Obergurt und Untergurt mit eigener Breite/Dicke, beliebig viele Stege mit eigener Lage und Dicke.
+ * Deckt unsymmetrische Schweißprofile, Mehrstegträger und Kästen (zwei Stege am Rand) ab.
+ * Gurte liegen mittig zur Symmetrieachse; Stegmitte y wird von dieser Achse aus gemessen (0 = Mitte).
+ */
+class GeschweisstTraeger extends Querschnitt {
+  static get titel() { return "Geschweißt: Gurte + Stege (frei)"; }
+  static get felder() {
+    return [
+      { id: "bo", label: "Obergurt Breite b_o [mm]", wert: 200 },
+      { id: "to", label: "Obergurt Dicke t_o [mm]", wert: 15 },
+      { id: "bu", label: "Untergurt Breite b_u [mm]", wert: 200 },
+      { id: "tu", label: "Untergurt Dicke t_u [mm]", wert: 15 },
+      { id: "h", label: "Gesamthöhe h [mm]", wert: 400 },
+      { id: "stege", text: true, zeilen: 3, info: "stege",
+        label: "Stege: Lage y und Dicke t [mm] (eine Zeile je Steg)", wert: "0 8" },
+    ];
+  }
+
+  /** Text -> Liste {y, t}, nach y sortiert. */
+  static parseStege(text) {
+    const l = [];
+    for (const zeile of String(text).split(/\r?\n/)) {
+      const t = zeile.trim(); if (!t) continue;
+      const n = t.replace(/;/g, " ").replace(/,/g, ".").split(/\s+/).map(Number);
+      if (n.length !== 2 || n.some(x => !Number.isFinite(x))) throw new Error(`Steg „${t}“: erwartet werden zwei Zahlen „y t“.`);
+      if (n[1] <= 0) throw new Error(`Steg „${t}“: Dicke muss größer als null sein.`);
+      l.push({ y: n[0], t: n[1] });
+    }
+    return l.sort((a, b) => a.y - b.y);
+  }
+
+  pruefe() {
+    const f = super.pruefe(); if (f) return f;
+    const { bo, to, bu, tu, h } = this.w;
+    if (to + tu >= h) return "Die Gurtdicken müssen zusammen kleiner als die Höhe sein.";
+    const s = this._stege = GeschweisstTraeger.parseStege(this.w.stege);
+    if (!s.length) return "Bitte mindestens einen Steg angeben.";
+    const bmin = Math.min(bo, bu);
+    for (let i = 0; i < s.length; i++) {
+      if (Math.abs(s[i].y) + s[i].t / 2 > bmin / 2 + 1e-9) return `Steg ${i + 1} ragt über den schmaleren Gurt hinaus.`;
+      if (i && s[i].y - s[i].t / 2 < s[i - 1].y + s[i - 1].t / 2 - 1e-9) return `Stege ${i} und ${i + 1} überlappen sich.`;
+    }
+    return null;
+  }
+
+  erzeugeTeile() {
+    const { bo, to, bu, tu, h } = this.w, B = Math.max(bo, bu), hw = h - to - tu;
+    const teile = [new RechteckTeil((B - bo) / 2, 0, bo, to), new RechteckTeil((B - bu) / 2, h - tu, bu, tu)];
+    for (const s of this._stege) teile.push(new RechteckTeil(B / 2 + s.y - s.t / 2, to, s.t, hw));
+    return teile;
+  }
+
+  /** Teilplatten eines Gurts: Überstände (einseitig gestützt) und Felder zwischen den Stegen (beidseitig gestützt). */
+  _gurtteile(b, t, name, eps) {
+    const s = this._stege, K = Klassifizierung, out = [];
+    const links = s[0].y - s[0].t / 2 + b / 2, rechts = b / 2 - (s[s.length - 1].y + s[s.length - 1].t / 2);
+    for (const [c, n] of [[links, "Überstand links"], [rechts, "Überstand rechts"]]) {
+      if (c > 1e-6) out.push({ name: `${name} ${n}`, ...K.teil(c / t, K.AUSSTEHEND, eps) });
+    }
+    for (let i = 1; i < s.length; i++) {
+      const c = (s[i].y - s[i].t / 2) - (s[i - 1].y + s[i - 1].t / 2);
+      if (c > 1e-6) out.push({ name: `${name} Feld ${i}`, ...K.teil(c / t, K.INNEN_DRUCK, eps) });
+    }
+    return out;
+  }
+
+  // Beide Gurte werden als gedrückt betrachtet (Vorzeichen des Moments ist hier nicht bekannt): konservativ.
+  klassen(fy) {
+    const { bo, to, bu, tu, h } = this.w, eps = Klassifizierung.eps(fy), K = Klassifizierung, d = h - to - tu;
+    const gurte = [...this._gurtteile(bo, to, "Obergurt", eps), ...this._gurtteile(bu, tu, "Untergurt", eps)];
+    const stegB = this._stege.map((s, i) => ({ name: `Steg ${i + 1}`, ...K.teil(d / s.t, K.STEG_BIEGUNG, eps) }));
+    const stegD = this._stege.map((s, i) => ({ name: `Steg ${i + 1}`, ...K.teil(d / s.t, K.INNEN_DRUCK, eps) }));
+    const mehr = this._stege.length > 1;      // bei mehreren Stegen wirken diese auch bei Biegung um z als Wände unter Druck
+    return {
+      biegungY: K.fasse([...gurte, ...stegB]),
+      biegungZ: K.fasse(mehr ? [...gurte, ...stegD] : gurte),
+      druck: K.fasse([...gurte, ...stegD]),
+      hinweis: "Näherung: beide Gurte als gedrückt, Stegklassifizierung wie bei symmetrischem Querschnitt.",
+    };
+  }
+
+  // Schubfläche: A_v,z = Σ h_w·t_w (η = 1,0), A_v,y = A − Σ h_w·t_w
+  schubflaechen() {
+    const hw = this.w.h - this.w.to - this.w.tu, Aw = hw * this._stege.reduce((a, s) => a + s.t, 0);
+    return { z: Aw, y: this.A - Aw, hinweis: "Geschweißter Träger: A<sub>v,z</sub> = Σ h<sub>w</sub>·t<sub>w</sub> (η = 1,0)." };
+  }
+
+  // Formeln der EN 1993-1-1 gibt es nur für symmetrische Sonderfälle (I bzw. Kasten); sonst numerisch (α = β = 1).
+  nachweisdaten() {
+    const { bo, to, bu, tu, h } = this.w, s = this._stege;
+    if (bo === bu && to === tu && s.length === 1 && Math.abs(s[0].y) < 1e-9) return { art: "I", b: bo, h, tf: to, tw: s[0].t };
+    if (bo === bu && to === tu && s.length === 2 && s[0].t === s[1].t && s[0].t === to && Math.abs(s[0].y + s[1].y) < 1e-9
+        && Math.abs(Math.abs(s[0].y) + s[0].t / 2 - bo / 2) < 1e-9) return { art: "RHS", b: bo, h, t: to };
+    return null;
+  }
+}
+
 /** Register aller Querschnitte (Schlüssel -> Klasse). Neue Querschnitte hier oder in profile.js ergänzen. */
 const QUERSCHNITTE = {
   rechteck: Rechteck,
   tquerschnitt: TQuerschnitt,
   doppelt: DoppelT,
+  geschweisst: GeschweisstTraeger,
   kasten: Kasten,
   kreis: Kreis,
   rohr: Rohr,

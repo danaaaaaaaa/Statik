@@ -157,10 +157,19 @@ const INFO = {
       "Schwerpunkt: y<sub>s</sub> = S<sub>z</sub>/A, z<sub>s</sub> = S<sub>y</sub>/A; danach Verschiebung: I<sub>y,s</sub> = I<sub>y</sub> − A·z<sub>s</sub>² usw.",
     ],
     text: "Eingabe: eine Ecke je Zeile als „y z“ in mm (y nach rechts, z nach <b>unten</b>). Dezimalkomma oder -punkt, Trennung durch Leerzeichen oder Semikolon. " +
-      "Eine Leerzeile beginnt eine neue Kontur: die 1. Kontur ist die Außenkontur, jede weitere eine Aussparung (Loch). " +
+      "Die 1. Kontur ist die Außenkontur, jede weitere eine Aussparung (beliebig viele). Eine neue Kontur beginnt nach einer Leerzeile oder automatisch, sobald der Startpunkt der aktuellen Kontur wieder erreicht wird. Aussparungen dürfen den Rand berühren. " +
       "Umlaufsinn und Wiederholung des Startpunkts sind egal; Kanten dürfen sich nicht kreuzen. " +
       "Der Rand wird nur einmal umfahren, es werden keine Teilflächen und Steineranteile gebildet. Jede Kontur geht mit ihrem Vorzeichen (Loch negativ) in die Summen ein.",
     normen: ["Technische Mechanik / Geometrie (kein Normverweis)"],
+  },
+  stege: {
+    titel: "Geschweißter Träger: Stege",
+    formeln: ["Stegmitte: y [mm] von der Symmetrieachse der Gurte (0 = Mitte, positiv nach rechts)", "A<sub>v,z</sub> = Σ h<sub>w</sub>·t<sub>w</sub> &nbsp;(h<sub>w</sub> = h − t<sub>o</sub> − t<sub>u</sub>)"],
+    text: "Je Zeile ein Steg mit Lage y und Dicke t. Beispiele: „0 8“ = ein mittiger Steg 8 mm; „-75 21“ und „75 21“ = Zweistegträger; " +
+      "zwei Stege am Rand ergeben einen Hohlkasten. Obergurt und Untergurt können unterschiedliche Breite und Dicke haben. " +
+      "Die Stege müssen innerhalb des schmaleren Gurtes liegen und dürfen sich nicht überlappen. " +
+      "Klassifizierung: Gurtüberstände (einseitig gestützt) und Gurtfelder zwischen den Stegen (beidseitig gestützt) einzeln; beide Gurte werden vereinfachend als gedrückt angenommen.",
+    normen: [`${EC3}, Tab. 5.2 (Klassifizierung)`, `${EC3}, 6.2.6(3) (Schubfläche)`],
   },
   Iyz: {
     titel: "Deviationsmoment I<sub>yz</sub>",

@@ -56,3 +56,14 @@ unter gleichem Namen erneut hochladen. Danach 1–2 Minuten warten und die Seite
 - **Querschnittsklassifizierung** steht jetzt direkt unter den Querschnittswerten.
 - Im E-P-Modus entfallen σ_v-Darstellung und -Nachweis; der Nachweis ist die E-P-Interaktion. Übersteigt die Beanspruchung die Traglast, wird der Grenzzustand beim größten erreichbaren Lastanteil gezeigt.
 - Einschränkung: Der E-P-Spannungszustand berücksichtigt N, M_y, M_z; τ bleibt elastisch (Jourawski), der Querkrafteinfluss steckt im Nachweis (M_V,Rd).
+
+## Version 5
+- Desktop: Eingabespalte links bleibt beim Scrollen stehen (sticky), nur die Ergebnisse scrollen.
+- E-P: Ausnutzungen (Querkraft, Normalkraft, Biegung+N+V, maßgebend) in der Tragfähigkeit und im Spannungsblock.
+- Neues Spannungsdiagramm σ(z) bzw. σ(y) unter dem 3D-Fenster: Fließplateaus an den Rändern (±f_yd), linearer Kern, gestrichelt die fortgesetzte Dehnungsebene. Bei M_pl: Rechteckblöcke oberhalb/unterhalb der Schwerachse.
+- 3D: Grundfläche halbtransparent, damit die Druckzone in der Vorderansicht nicht verdeckt wird.
+
+## Version 6
+- Polygon: beliebig viele Aussparungen; eine neue Kontur beginnt nach einer Leerzeile **oder** automatisch, wenn der Startpunkt wieder erreicht wird (behebt den fehlerhaften Obergurt bei fortlaufend eingegebenen Konturen). Aussparungen dürfen den Rand berühren.
+- Neuer Querschnitt „Geschweißt: Gurte + Stege (frei)": Ober-/Untergurt mit eigener Breite und Dicke, beliebig viele Stege mit Lage und Dicke (Zweistegträger, Kasten, unsymmetrisches I). Klassifizierung je Gurtüberstand/Gurtfeld/Steg, Schubfläche Σ h_w·t_w.
+- Speicherslots 1–6 für die Querschnittseingabe (Stahlbau): automatisches Speichern im lokalen Browser-Speicher, Wechsel per Klick; leerer Slot startet als Kopie der aktuellen Eingabe.
