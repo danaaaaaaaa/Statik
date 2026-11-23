@@ -67,3 +67,7 @@ unter gleichem Namen erneut hochladen. Danach 1–2 Minuten warten und die Seite
 - Polygon: beliebig viele Aussparungen; eine neue Kontur beginnt nach einer Leerzeile **oder** automatisch, wenn der Startpunkt wieder erreicht wird (behebt den fehlerhaften Obergurt bei fortlaufend eingegebenen Konturen). Aussparungen dürfen den Rand berühren.
 - Neuer Querschnitt „Geschweißt: Gurte + Stege (frei)": Ober-/Untergurt mit eigener Breite und Dicke, beliebig viele Stege mit Lage und Dicke (Zweistegträger, Kasten, unsymmetrisches I). Klassifizierung je Gurtüberstand/Gurtfeld/Steg, Schubfläche Σ h_w·t_w.
 - Speicherslots 1–6 für die Querschnittseingabe (Stahlbau): automatisches Speichern im lokalen Browser-Speicher, Wechsel per Klick; leerer Slot startet als Kopie der aktuellen Eingabe.
+
+## Version 7
+- Geschweißter Träger: Eingabe von Anzahl und Dicke der Stege; Verteilung gleichmäßig (1 mittig, 2 in den Drittelspunkten, 3 in den Viertelspunkten ...) über die Breite des schmaleren Gurts. Textfeld nur noch im Sonderfall „Einzeln“ (Lage von der linken Gurtkante). Felder mit `zeigeWenn` werden bedingt eingeblendet.
+- Bei ungültiger Eingabe wird jetzt auch die Klassifizierung mit der Fehlermeldung ersetzt (keine veralteten Werte).

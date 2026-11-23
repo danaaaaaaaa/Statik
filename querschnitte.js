@@ -777,23 +777,28 @@ class PolygonQuerschnitt extends Querschnitt {
 /**
  * Obergurt und Untergurt mit eigener Breite/Dicke, beliebig viele Stege mit eigener Lage und Dicke.
  * Deckt unsymmetrische Schweißprofile, Mehrstegträger und Kästen (zwei Stege am Rand) ab.
- * Gurte liegen mittig zur Symmetrieachse; Stegmitte y wird von dieser Achse aus gemessen (0 = Mitte).
+ * Gurte liegen mittig zur Symmetrieachse. Standard: n Stege gleichmäßig verteilt (1 mittig, 2 in den Drittelspunkten ...).
+ * Sonderfall: Stege einzeln mit Lage und Dicke (Lage von der linken Kante des breiteren Gurts).
  */
 class GeschweisstTraeger extends Querschnitt {
   static get titel() { return "Geschweißt: Gurte + Stege (frei)"; }
   static get felder() {
+    const gl = w => w.modus === "Gleichmäßig";
     return [
       { id: "bo", label: "Obergurt Breite b_o [mm]", wert: 200 },
       { id: "to", label: "Obergurt Dicke t_o [mm]", wert: 15 },
       { id: "bu", label: "Untergurt Breite b_u [mm]", wert: 200 },
       { id: "tu", label: "Untergurt Dicke t_u [mm]", wert: 15 },
       { id: "h", label: "Gesamthöhe h [mm]", wert: 400 },
-      { id: "stege", text: true, zeilen: 3, info: "stege",
-        label: "Stege: Lage y und Dicke t [mm] (eine Zeile je Steg)", wert: "0 8" },
+      { id: "modus", label: "Stegverteilung", optionen: ["Gleichmäßig", "Einzeln (Sonderfall)"], wert: "Gleichmäßig", info: "stege" },
+      { id: "nw", label: "Anzahl Stege n [–]", wert: 1, zeigeWenn: gl },
+      { id: "tw", label: "Stegdicke t_w [mm]", wert: 8, zeigeWenn: gl },
+      { id: "stege", text: true, zeilen: 3, zeigeWenn: w => !gl(w),
+        label: "Stege einzeln: Lage y (Stegmitte, von der linken Gurtkante) und Dicke t [mm], eine Zeile je Steg", wert: "100 8" },
     ];
   }
 
-  /** Text -> Liste {y, t}, nach y sortiert. */
+  /** Text -> Liste {y, t} (y = Stegmitte von der linken Kante des breiteren Gurts), nach y sortiert. */
   static parseStege(text) {
     const l = [];
     for (const zeile of String(text).split(/\r?\n/)) {
@@ -806,13 +811,27 @@ class GeschweisstTraeger extends Querschnitt {
     return l.sort((a, b) => a.y - b.y);
   }
 
+  /** Stege gleichmäßig über die Breite des schmaleren Gurts verteilen: 1 mittig, 2 in den Drittelspunkten, 3 in den Viertelspunkten ... */
+  static verteile(n, t, bmin) {
+    return Array.from({ length: n }, (_, i) => ({ y: -bmin / 2 + (i + 1) * bmin / (n + 1), t }));
+  }
+
   pruefe() {
     const f = super.pruefe(); if (f) return f;
     const { bo, to, bu, tu, h } = this.w;
     if (to + tu >= h) return "Die Gurtdicken müssen zusammen kleiner als die Höhe sein.";
-    const s = this._stege = GeschweisstTraeger.parseStege(this.w.stege);
-    if (!s.length) return "Bitte mindestens einen Steg angeben.";
-    const bmin = Math.min(bo, bu);
+    const bmin = Math.min(bo, bu), B = Math.max(bo, bu);
+    let s;
+    if (this.w.modus === "Gleichmäßig") {
+      const n = Math.round(this.w.nw);
+      if (!(n >= 1 && n <= 20)) return "Die Anzahl der Stege muss zwischen 1 und 20 liegen.";
+      if (!(this.w.tw > 0)) return "Die Stegdicke muss größer als null sein.";
+      s = GeschweisstTraeger.verteile(n, this.w.tw, bmin);
+    } else {
+      s = GeschweisstTraeger.parseStege(this.w.stege).map(x => ({ y: x.y - B / 2, t: x.t }));   // auf die Symmetrieachse beziehen
+      if (!s.length) return "Bitte mindestens einen Steg angeben.";
+    }
+    this._stege = s;
     for (let i = 0; i < s.length; i++) {
       if (Math.abs(s[i].y) + s[i].t / 2 > bmin / 2 + 1e-9) return `Steg ${i + 1} ragt über den schmaleren Gurt hinaus.`;
       if (i && s[i].y - s[i].t / 2 < s[i - 1].y + s[i - 1].t / 2 - 1e-9) return `Stege ${i} und ${i + 1} überlappen sich.`;

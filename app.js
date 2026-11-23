@@ -109,6 +109,7 @@ class QuerschnittWahl {
       const el = document.getElementById(`${this.box.id}-${id}`);
       if (el) el.value = v;
     }
+    this._sichtbarkeit();
   }
 
   /** Aktuelle Eingabe im aktiven Slot ablegen. */
@@ -156,7 +157,7 @@ class QuerschnittWahl {
         el = document.createElement("select");
         f.optionen.forEach(o => el.add(new Option(o, o)));
         el.value = f.wert;
-        el.addEventListener("change", () => this.cb());
+        el.addEventListener("change", () => { this._sichtbarkeit(); this.cb(); });
         label.style.gridColumn = "1 / -1"; // Profilauswahl über die volle Breite
       } else if (f.text) {
         el = document.createElement("textarea");
@@ -170,8 +171,22 @@ class QuerschnittWahl {
         el.addEventListener("input", () => this.cb());
       }
       el.id = `${this.box.id}-${f.id}`;
+      label.id = `${el.id}-label`;
       label.appendChild(el);
       this.box.appendChild(label);
+    }
+    this._sichtbarkeit();
+  }
+
+  /** Felder mit zeigeWenn(werte) nur einblenden, wenn die Bedingung erfüllt ist (z. B. Einzelstege nur im Sonderfall). */
+  _sichtbarkeit() {
+    const werte = {};
+    for (const f of this.klasse.felder) {
+      const el = document.getElementById(`${this.box.id}-${f.id}`);
+      werte[f.id] = (f.optionen || f.text) ? el.value : Number(el.value);
+    }
+    for (const f of this.klasse.felder) {
+      if (f.zeigeWenn) document.getElementById(`${this.box.id}-${f.id}-label`).classList.toggle("versteckt", !f.zeigeWenn(werte));
     }
   }
 
@@ -572,7 +587,7 @@ class StahlbauSeite {
   aktualisiere() {
     const fehler = txt => {
       const f = `<span class="fehler">${txt}</span>`;
-      for (const id of ["sp-nachweis", "qw-tabelle", "tf-ergebnis"]) document.getElementById(id).innerHTML = f;
+      for (const id of ["sp-nachweis", "qw-tabelle", "tf-ergebnis", "kl-ergebnis"]) document.getElementById(id).innerHTML = f;
     };
     let q;
     try { q = this.wahl.erzeuge(); } catch (e) { fehler(e.message); return; }

@@ -164,9 +164,10 @@ const INFO = {
   },
   stege: {
     titel: "Geschweißter Träger: Stege",
-    formeln: ["Stegmitte: y [mm] von der Symmetrieachse der Gurte (0 = Mitte, positiv nach rechts)", "A<sub>v,z</sub> = Σ h<sub>w</sub>·t<sub>w</sub> &nbsp;(h<sub>w</sub> = h − t<sub>o</sub> − t<sub>u</sub>)"],
-    text: "Je Zeile ein Steg mit Lage y und Dicke t. Beispiele: „0 8“ = ein mittiger Steg 8 mm; „-75 21“ und „75 21“ = Zweistegträger; " +
-      "zwei Stege am Rand ergeben einen Hohlkasten. Obergurt und Untergurt können unterschiedliche Breite und Dicke haben. " +
+    formeln: ["Gleichmäßig: Steg i bei y<sub>i</sub> = i·b/(n+1) von der Gurtkante (b = schmalerer Gurt)", "A<sub>v,z</sub> = Σ h<sub>w</sub>·t<sub>w</sub> &nbsp;(h<sub>w</sub> = h − t<sub>o</sub> − t<sub>u</sub>)"],
+    text: "Standard: Anzahl und Dicke der Stege eingeben; die Stege werden gleichmäßig verteilt (1 Steg mittig, 2 Stege in den Drittelspunkten, 3 in den Viertelspunkten usw.). " +
+      "Sonderfall „Einzeln“: je Zeile ein Steg mit Lage y (Stegmitte, gemessen von der linken Kante des breiteren Gurts) und Dicke t. " +
+      "Beispiel Kasten 200 mm breit mit 10 mm Wänden: „5 10“ und „195 10“. Obergurt und Untergurt können unterschiedliche Breite und Dicke haben. " +
       "Die Stege müssen innerhalb des schmaleren Gurtes liegen und dürfen sich nicht überlappen. " +
       "Klassifizierung: Gurtüberstände (einseitig gestützt) und Gurtfelder zwischen den Stegen (beidseitig gestützt) einzeln; beide Gurte werden vereinfachend als gedrückt angenommen.",
     normen: [`${EC3}, Tab. 5.2 (Klassifizierung)`, `${EC3}, 6.2.6(3) (Schubfläche)`],
