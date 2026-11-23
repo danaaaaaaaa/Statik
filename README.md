@@ -71,3 +71,7 @@ unter gleichem Namen erneut hochladen. Danach 1–2 Minuten warten und die Seite
 ## Version 7
 - Geschweißter Träger: Eingabe von Anzahl und Dicke der Stege; Verteilung gleichmäßig (1 mittig, 2 in den Drittelspunkten, 3 in den Viertelspunkten ...) über die Breite des schmaleren Gurts. Textfeld nur noch im Sonderfall „Einzeln“ (Lage von der linken Gurtkante). Felder mit `zeigeWenn` werden bedingt eingeblendet.
 - Bei ungültiger Eingabe wird jetzt auch die Klassifizierung mit der Fehlermeldung ersetzt (keine veralteten Werte).
+
+## Version 8
+- Reiter 1–6 speichern neben dem Querschnitt auch die Schnittgrößen (N, V_y, V_z, M_y, M_z); Knopf „Schnittgrößen aus Reiter 1 übernehmen" (nur aktiv, wenn nicht Reiter 1 aktiv ist). Allgemein: `QuerschnittWahl` hat einen optionalen Parameter `zusatz {holen, setzen}` für weitere reiterbezogene Eingaben.
+- Neues Layout Stahlbau: Querschnittswerte in zwei Tabellen (Geometrie | Widerstände) neben Skizze und Klassifizierung; darunter Spannungen | Tragfähigkeit + „Spannungen an Punkten". Die Eingabespalte ist dadurch kürzer.

@@ -13,6 +13,7 @@
  */
 
 /** Tabellenzeile: Bezeichnung | Wert | Einheit */
+const SchnittgroessenIds = ["in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"];   // Eingabefelder der Schnittgrößen
 const zeile = (l, w, e = "") => `<tr><td>${l}</td><td>${w}</td><td>${e}</td></tr>`;
 /** Bezeichnung mit Info-Symbol (Formel und Norm, siehe info.js) */
 const lbl = (text, key) => text + infoBtn(key);
@@ -43,10 +44,11 @@ class QuerschnittWahl {
    * @param {Function} beiAenderung Rückruf bei jeder Änderung
    * @param {string} start Schlüssel des vorgewählten Querschnitts (optional)
    */
-  constructor(selectId, felderId, beiAenderung, start = null, slotsId = null) {
+  constructor(selectId, felderId, beiAenderung, start = null, slotsId = null, zusatz = null) {
     this.sel = document.getElementById(selectId);
     this.box = document.getElementById(felderId);
     this.slotBox = slotsId ? document.getElementById(slotsId) : null;
+    this.zusatz = zusatz;            // optional {holen(), setzen(o)}: weitere Eingaben (z. B. Schnittgrößen), die je Reiter gespeichert werden
     this.beiAenderung = beiAenderung;
     // jede Änderung wird zuerst im aktiven Slot gespeichert, dann weitergegeben
     this.cb = () => { this._speichere(); this.beiAenderung(); };
@@ -97,7 +99,7 @@ class QuerschnittWahl {
   _zustand() {
     const werte = {};
     for (const f of this.klasse.felder) werte[f.id] = document.getElementById(`${this.box.id}-${f.id}`).value;
-    return { typ: this.sel.value, werte };
+    return { typ: this.sel.value, werte, zusatz: this.zusatz ? this.zusatz.holen() : undefined };
   }
 
   /** Zustand in die Felder schreiben. */
@@ -110,6 +112,7 @@ class QuerschnittWahl {
       if (el) el.value = v;
     }
     this._sichtbarkeit();
+    if (z.zusatz && this.zusatz) this.zusatz.setzen(z.zusatz);
   }
 
   /** Aktuelle Eingabe im aktiven Slot ablegen. */
@@ -135,7 +138,7 @@ class QuerschnittWahl {
       b.classList.toggle("aktiv", i === this.aktiv);
       b.classList.toggle("leer", !this.slots[i]);
       const z = this.slots[i];
-      b.title = z ? `Slot ${i + 1}: ${QUERSCHNITTE[z.typ] ? QUERSCHNITTE[z.typ].titel : z.typ}` : `Slot ${i + 1}: leer (startet als Kopie)`;
+      b.title = z ? `Reiter ${i + 1}: ${QUERSCHNITTE[z.typ] ? QUERSCHNITTE[z.typ].titel : z.typ}` : `Reiter ${i + 1}: leer (startet als Kopie)`;
     });
   }
 
@@ -268,37 +271,44 @@ class QSkizze {
 class QuerschnittswerteAnzeige {
   /** HTML-Tabelle aller Querschnittswerte. */
   static html(q) {
-    let h = "<table>";
-    h += zeile(lbl("Breite b", "breite"), fmt(q.breite, 1), "mm");
-    h += zeile(lbl("Höhe h", "hoehe"), fmt(q.hoehe, 1), "mm");
-    h += zeile(lbl("<b>Fläche A</b>", "A"), `<b>${fmt(q.A / 100, 2)}</b>`, "cm²");
-    h += zeile(lbl("Masse (Stahl)", "masse"), fmt(q.masse, 1), "kg/m");
-    h += zeile(lbl("z<sub>s</sub> von Oberkante", "zs"), fmt(Math.abs(q.zmin), 1), "mm");
-    h += zeile("z<sub>s</sub> von Unterkante", fmt(q.zmax, 1), "mm");
-    h += zeile(lbl("y<sub>s</sub> von links", "ys"), fmt(Math.abs(q.ymin), 1), "mm");
-    h += zeile(lbl("<b>I<sub>y</sub></b>", "Iy"), `<b>${fmt(q.Iy / 1e4, 1)}</b>`, "cm⁴");
-    h += zeile(lbl("<b>I<sub>z</sub></b>", "Iz"), `<b>${fmt(q.Iz / 1e4, 1)}</b>`, "cm⁴");
+    // linke Tabelle: Geometrie und Trägheit
+    let g = "<table>";
+    g += zeile(lbl("Breite b", "breite"), fmt(q.breite, 1), "mm");
+    g += zeile(lbl("Höhe h", "hoehe"), fmt(q.hoehe, 1), "mm");
+    g += zeile(lbl("<b>Fläche A</b>", "A"), `<b>${fmt(q.A / 100, 2)}</b>`, "cm²");
+    g += zeile(lbl("Masse (Stahl)", "masse"), fmt(q.masse, 1), "kg/m");
+    g += zeile(lbl("z<sub>s</sub> von oben", "zs"), fmt(Math.abs(q.zmin), 1), "mm");
+    g += zeile("z<sub>s</sub> von unten", fmt(q.zmax, 1), "mm");
+    g += zeile(lbl("y<sub>s</sub> von links", "ys"), fmt(Math.abs(q.ymin), 1), "mm");
+    g += zeile(lbl("<b>I<sub>y</sub></b>", "Iy"), `<b>${fmt(q.Iy / 1e4, 1)}</b>`, "cm⁴");
+    g += zeile(lbl("<b>I<sub>z</sub></b>", "Iz"), `<b>${fmt(q.Iz / 1e4, 1)}</b>`, "cm⁴");
     if (q.unsymmetrisch) {
-      h += zeile(lbl("I<sub>yz</sub>", "Iyz"), fmt(q.Iyz / 1e4, 1), "cm⁴");
-      h += zeile(lbl("I<sub>1</sub> (Hauptachse)", "hauptachsen"), fmt(q.I1 / 1e4, 1), "cm⁴");
-      h += zeile("I<sub>2</sub> (Hauptachse)", fmt(q.I2 / 1e4, 1), "cm⁴");
-      h += zeile("α (Hauptachse 1 gegen y)", fmt(q.alphaHaupt * 180 / Math.PI, 2), "°");
+      g += zeile(lbl("I<sub>yz</sub>", "Iyz"), fmt(q.Iyz / 1e4, 1), "cm⁴");
+      g += zeile(lbl("I<sub>1</sub> (Hauptachse)", "hauptachsen"), fmt(q.I1 / 1e4, 1), "cm⁴");
+      g += zeile("I<sub>2</sub> (Hauptachse)", fmt(q.I2 / 1e4, 1), "cm⁴");
+      g += zeile("α (Hauptachse 1)", fmt(q.alphaHaupt * 180 / Math.PI, 2), "°");
     }
-    h += zeile(lbl("I<sub>p</sub> = I<sub>y</sub> + I<sub>z</sub>", "Ip"), fmt(q.Ip / 1e4, 1), "cm⁴");
-    h += zeile(lbl("<b>W<sub>el,y,o</sub></b> (oben)", "Wyo"), `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("<b>W<sub>el,y,u</sub></b> (unten)", "Wyu"), `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("<b>W<sub>el,z</sub></b>", "Wz"), `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("<b>W<sub>pl,y</sub></b>", "Wpl"), `<b>${fmt(q.Wply / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("<b>W<sub>pl,z</sub></b>", "Wpl"), `<b>${fmt(q.Wplz / 1e3, 2)}</b>`, "cm³");
-    h += zeile(lbl("α<sub>pl,y</sub> = W<sub>pl,y</sub>/W<sub>el,y</sub>", "alpha"), fmt(q.Wply / q.Wely, 3), "–");
-    h += zeile("α<sub>pl,z</sub> = W<sub>pl,z</sub>/W<sub>el,z</sub>", fmt(q.Wplz / q.Welz, 3), "–");
-    h += zeile(lbl("Lage pl. NL (y–y)", "pna"), fmt(q.plastisch("y").lage, 1), "mm");
-    h += zeile("Lage pl. NL (z–z)", fmt(q.plastisch("z").lage, 1), "mm");
-    h += zeile(lbl("i<sub>y</sub>", "iy"), fmt(q.iy / 10, 2), "cm");
-    h += zeile(lbl("i<sub>z</sub>", "iz"), fmt(q.iz / 10, 2), "cm");
-    h += zeile(lbl("S<sub>y</sub> (obere Hälfte)", "Sy"), fmt(q.Sy / 1e3, 2), "cm³");
-    h += "</table>";
-    h += '<p class="hinweis">Lage pl. NL: Abstand der plastischen Nulllinie vom Schwerpunkt (positiv nach unten bzw. rechts).</p>';
+    g += zeile(lbl("I<sub>p</sub>", "Ip"), fmt(q.Ip / 1e4, 1), "cm⁴");
+    g += zeile(lbl("i<sub>y</sub>", "iy"), fmt(q.iy / 10, 2), "cm");
+    g += zeile(lbl("i<sub>z</sub>", "iz"), fmt(q.iz / 10, 2), "cm");
+    g += "</table>";
+
+    // rechte Tabelle: Widerstandsmomente und plastische Größen
+    let w = "<table>";
+    w += zeile(lbl("<b>W<sub>el,y,o</sub></b> (oben)", "Wyo"), `<b>${fmt(q.Wyo / 1e3, 2)}</b>`, "cm³");
+    w += zeile(lbl("<b>W<sub>el,y,u</sub></b> (unten)", "Wyu"), `<b>${fmt(q.Wyu / 1e3, 2)}</b>`, "cm³");
+    w += zeile(lbl("<b>W<sub>el,z</sub></b>", "Wz"), `<b>${fmt(q.Wz / 1e3, 2)}</b>`, "cm³");
+    w += zeile(lbl("<b>W<sub>pl,y</sub></b>", "Wpl"), `<b>${fmt(q.Wply / 1e3, 2)}</b>`, "cm³");
+    w += zeile(lbl("<b>W<sub>pl,z</sub></b>", "Wpl"), `<b>${fmt(q.Wplz / 1e3, 2)}</b>`, "cm³");
+    w += zeile(lbl("α<sub>pl,y</sub>", "alpha"), fmt(q.Wply / q.Wely, 3), "–");
+    w += zeile("α<sub>pl,z</sub>", fmt(q.Wplz / q.Welz, 3), "–");
+    w += zeile(lbl("pl. NL y–y", "pna"), fmt(q.plastisch("y").lage, 1), "mm");
+    w += zeile("pl. NL z–z", fmt(q.plastisch("z").lage, 1), "mm");
+    w += zeile(lbl("S<sub>y</sub> (obere Hälfte)", "Sy"), fmt(q.Sy / 1e3, 2), "cm³");
+    w += "</table>";
+
+    let h = `<div class="qw-spalten">${g}${w}</div>`;
+    h += '<p class="hinweis">α<sub>pl</sub> = W<sub>pl</sub>/W<sub>el</sub>. pl. NL: Lage der plastischen Nulllinie vom Schwerpunkt (positiv nach unten bzw. rechts).</p>';
     if (q.unsymmetrisch) h += '<p class="hinweis">Unsymmetrischer Querschnitt: y und z sind keine Hauptachsen (I<sub>yz</sub> ≠ 0).</p>';
     return h;
   }
@@ -566,7 +576,10 @@ class StahlbauSeite {
   constructor() {
     this.skizze = new QSkizze(document.getElementById("st-skizze"));
     this.spannung = new SpannungsAnzeige();
-    this.wahl = new QuerschnittWahl("st-typ", "st-felder", () => this.aktualisiere(), "ipe", "st-slots");
+    this.wahl = new QuerschnittWahl("st-typ", "st-felder", () => this.aktualisiere(), "ipe", "st-slots", {
+      holen: () => Object.fromEntries(SchnittgroessenIds.map(id => [id, document.getElementById(id).value])),
+      setzen: o => SchnittgroessenIds.forEach(id => { if (o[id] !== undefined) document.getElementById(id).value = o[id]; }),
+    });
 
     const sel = document.getElementById("st-guete");
     STAHLGUETEN.forEach(([name]) => sel.add(new Option(name, name)));
@@ -577,9 +590,14 @@ class StahlbauSeite {
       this.plastischGewuenscht = b.dataset.modus === "ep";
       this.aktualisiere();
     }));
-    for (const id of ["st-gm0", "in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"]) {
-      document.getElementById(id).addEventListener("input", () => this.aktualisiere());
-    }
+    document.getElementById("st-gm0").addEventListener("input", () => this.aktualisiere());
+    // Schnittgrößen gehören zum Reiter: Änderung wird im aktiven Reiter gespeichert
+    for (const id of SchnittgroessenIds) document.getElementById(id).addEventListener("input", () => this.wahl.cb());
+    // Schnittgrößen aus Reiter 1 in den aktuellen Reiter kopieren
+    document.getElementById("sg-uebernehmen").addEventListener("click", () => {
+      const z = this.wahl.slots && this.wahl.slots[0] && this.wahl.slots[0].zusatz;
+      if (z && this.wahl.aktiv !== 0) { this.wahl.zusatz.setzen(z); this.wahl.cb(); }
+    });
     this.aktualisiere();
   }
 
@@ -595,7 +613,9 @@ class StahlbauSeite {
     const name = document.getElementById("st-guete").value;
     const fy = STAHLGUETEN.find(s => s[0] === name)[1];
     const gm0 = zahl("st-gm0") > 0 ? zahl("st-gm0") : 1;
-    const [N, Vy, Vz, My, Mz] = ["in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"].map(zahl);
+    const [N, Vy, Vz, My, Mz] = SchnittgroessenIds.map(zahl);
+    const knopf = document.getElementById("sg-uebernehmen");        // nur sinnvoll, wenn nicht Reiter 1 aktiv ist
+    knopf.disabled = this.wahl.aktiv === 0 || !(this.wahl.slots && this.wahl.slots[0] && this.wahl.slots[0].zusatz);
 
     const r = new Stahlbemessung(q, fy, gm0).berechne();
     const ep = new PlastischerNachweis(q, fy, gm0, r).berechne(N, Vy, Vz, My, Mz);

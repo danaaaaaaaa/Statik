@@ -42,7 +42,7 @@
     <section id="tab-stahlbau" class="seite">
       <div class="eingabe">
         <h2>Querschnitt</h2>
-        <div class="knoepfe slots"><span class="slotname">Slot</span><span id="st-slots" class="knoepfe"></span></div>
+        <div class="knoepfe slots"><span class="slotname">Reiter</span><span id="st-slots" class="knoepfe"></span></div>
         <label><span>Form</span><select id="st-typ"></select></label>
         <div id="st-felder" class="raster"></div>
 
@@ -63,6 +63,7 @@
         <p class="hinweis">y nach rechts, z nach unten, Ursprung im Schwerpunkt. N &gt; 0: Zug. M<sub>y</sub> &gt; 0: Zug unten.
           M<sub>z</sub> &gt; 0: Zug rechts. V<sub>z</sub> wirkt parallel zum Steg, V<sub>y</sub> parallel zu den Flanschen
           (nur der Betrag geht in die Nachweise ein).</p>
+        <p><button type="button" class="knopf" id="sg-uebernehmen">Schnittgrößen aus Reiter 1 übernehmen</button></p>
 
         <h2>Berechnungsart <button type="button" class="info" data-info="berechnungsart">i</button></h2>
         <div class="knoepfe" id="st-modus">
@@ -70,40 +71,28 @@
           <button class="knopf" data-modus="ep">Plastisch (E-P)</button>
         </div>
         <p class="hinweis" id="st-modus-hinweis"></p>
-
-        <h2>Punkte</h2>
-        <div class="raster">
-          <label><span>y [mm]</span><input type="number" id="pt-y" value="0" step="any"></label>
-          <label><span>z [mm]</span><input type="number" id="pt-z" value="0" step="any"></label>
-        </div>
-        <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
-        <table id="pt-tabelle">
-          <thead><tr><th>Punkt</th><th>y</th><th>z</th><th>σ</th><th>τ</th><th>σ<sub>v</sub></th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <p class="hinweis" id="pt-hinweis">Koordinaten in mm, Spannungen in N/mm².</p>
       </div>
 
       <div class="ergebnisse">
-        <!-- oben: Querschnittswerte neben der Skizze -->
-        <div class="zweispaltig">
-          <div>
+        <!-- Zeile 1: Querschnittswerte (zwei Tabellen nebeneinander) | Skizze und Klassifizierung -->
+        <div class="zeile-a">
+          <div class="a-qw">
             <h2>Querschnittswerte</h2>
             <div id="qw-tabelle" class="ergebnis"></div>
           </div>
-          <div class="skizzenbox">
+          <div class="a-sk">
             <h2>Querschnitt</h2>
             <canvas id="st-skizze" style="height:300px"></canvas>
             <p class="hinweis">Gestrichelt: Schwerachsen (rot y, blau z). Grün: plastische Nulllinien.
               Violett punktiert: Hauptachsen (nur bei unsymmetrischen Querschnitten).</p>
           </div>
+          <div class="a-kl">
+            <h2>Querschnittsklassifizierung <button type="button" class="info" data-info="klasse">i</button></h2>
+            <div id="kl-ergebnis" class="ergebnis"></div>
+          </div>
         </div>
 
-        <!-- Querschnittsklassifizierung direkt nach den Querschnittswerten -->
-        <h2>Querschnittsklassifizierung <button type="button" class="info" data-info="klasse">i</button></h2>
-        <div id="kl-ergebnis" class="ergebnis"></div>
-
-        <!-- darunter: Spannungen und Tragfähigkeit -->
+        <!-- Zeile 2: Spannungen (mit Punkten) | Tragfähigkeit -->
         <div class="zweispaltig">
           <div>
             <h2 id="sp-titel">Spannungen (elastisch, E-E)</h2>
@@ -124,10 +113,23 @@
             <p class="hinweis" id="sp-profil-hinweis"></p>
             <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Volle Farbe = Bezugswert (f<sub>yd</sub>, bei τ f<sub>yd</sub>/√3);
               orange gestrichelt: Grenzwert, grün gestrichelt: Nulllinie.</p>
+
           </div>
           <div>
             <h2>Tragfähigkeit</h2>
             <div id="tf-ergebnis" class="ergebnis"></div>
+
+            <h2>Spannungen an Punkten</h2>
+        <div class="raster">
+          <label><span>y [mm]</span><input type="number" id="pt-y" value="0" step="any"></label>
+          <label><span>z [mm]</span><input type="number" id="pt-z" value="0" step="any"></label>
+        </div>
+        <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
+        <table id="pt-tabelle">
+          <thead><tr><th>Punkt</th><th>y</th><th>z</th><th>σ</th><th>τ</th><th>σ<sub>v</sub></th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="hinweis" id="pt-hinweis">Koordinaten in mm, Spannungen in N/mm².</p>
           </div>
         </div>
       </div>

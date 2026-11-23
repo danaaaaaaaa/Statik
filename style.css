@@ -130,3 +130,16 @@ textarea { width: 100%; padding: .4rem .5rem; border: 1px solid #aab; border-rad
 .slotname { font-size: .8rem; color: #444; }
 .knopf.slot { padding: .25rem .6rem; min-width: 2rem; }
 .knopf.slot.leer { border-style: dashed; opacity: .75; }
+
+/* ---------- Layout Version 8: weniger Leerraum ---------- */
+.zeile-a { display: grid; gap: 0 1rem; align-items: start; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); grid-template-areas: "qw sk" "qw kl"; margin-bottom: 1rem; }
+.a-qw { grid-area: qw; } .a-sk { grid-area: sk; } .a-kl { grid-area: kl; }
+.zeile-a h2 { margin-top: 0; }
+.a-kl h2 { margin-top: 1rem; }
+.qw-spalten { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0 1rem; }
+.qw-spalten table { height: fit-content; }
+.zweispaltig { margin-bottom: 0; }
+h3.unter { font-size: .95rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid var(--rand); padding-bottom: .2rem; }
+@media (max-width: 1100px) {
+  .zeile-a { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sk" "qw" "kl"; }
+}
