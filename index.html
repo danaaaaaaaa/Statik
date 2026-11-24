@@ -149,13 +149,27 @@
         <p class="hinweis">X nach rechts, Z nach unten (Meter). Angekreuzt = gehaltene Richtung (X, Z, Drehung φ): X+Z gelenkig, nur Z Rolle, X+Z+φ Einspannung.</p>
         <h2>Stäbe</h2><div id="sw-staebe"></div>
         <label><span>E-Modul [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
+        <h2>Einwirkungen <button type="button" class="info" data-info="swEinwirkung">i</button></h2><div id="sw-ew"></div>
+        <p class="hinweis">Kategorie setzt die Kombinationsbeiwerte nach DIN EN 1990/NA vor; ψ-Werte sind änderbar. Jede Last wird in der Spalte „Einw." einer Einwirkung zugeordnet.</p>
         <h2>Knotenlasten</h2><div id="sw-kl"></div>
         <h2>Streckenlasten</h2><div id="sw-str"></div>
         <h2>Einzellasten</h2><div id="sw-ein"></div>
+        <h2>Teilsicherheitsbeiwerte <button type="button" class="info" data-info="swTsb">i</button></h2>
+        <label><span>Nachweis</span><select id="sw-nach"></select></label>
+        <div class="raster">
+          <label><span>γ<sub>G,sup</sub></span><input type="number" id="sw-gGs" value="1.35" step="any"></label>
+          <label><span>γ<sub>G,inf</sub></span><input type="number" id="sw-gGi" value="1" step="any"></label>
+          <label><span>γ<sub>Q</sub></span><input type="number" id="sw-gQ" value="1.5" step="any"></label>
+          <label><span>γ<sub>A</sub></span><input type="number" id="sw-gA" value="1" step="any"></label>
+        </div>
+        <button type="button" id="sw-tsb-reset">Norm-Vorbelegung</button>
         <p class="hinweis">Lasten positiv in Richtung +X bzw. +Z (nach unten). a = Abstand vom Stabanfang. Lokal z' liegt bei waagerechtem Stab unten.</p>
       </div>
       <div class="ergebnisse">
+        <div id="sw-unbest" class="sw-unbest"></div>
         <div class="raster">
+          <label style="grid-column:1 / -1"><span>Kombination</span><select id="sw-komb-typ"></select></label>
+          <label style="grid-column:1 / -1"><span>Maßgebend / einzeln</span><select id="sw-komb-nr"></select></label>
           <label><span>Darstellung</span><select id="sw-art">
             <option value="system">System und Lasten</option><option value="M" selected>Moment M</option>
             <option value="V">Querkraft V</option><option value="N">Normalkraft N</option><option value="verf">Verformung</option></select></label>
@@ -163,6 +177,7 @@
         </div>
         <canvas id="sw-canvas" style="height:420px"></canvas>
         <p class="hinweis" id="sw-hinweis"></p>
+        <p id="sw-komb-info"></p>
         <div id="sw-ergebnis" class="ergebnis"></div>
       </div>
     </section>
@@ -251,6 +266,7 @@
   <script src="ansicht3d.js"></script>
   <script src="stahlbeton.js"></script>
   <script src="stabwerk.js"></script>
+  <script src="lastfaelle.js"></script>
   <script src="stabwerk-ui.js"></script>
   <script src="app.js"></script>
 </body>

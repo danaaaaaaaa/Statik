@@ -264,6 +264,24 @@ const INFO = {
       "Die Schubspannung τ wird weiterhin elastisch nach Jourawski berechnet.",
     normen: [`${EC3}, 5.4.3 (Plastisches Verfahren)`, `${EC3}, 5.5 (Klassifizierung)`, `${EC3}, 6.2.1 bis 6.2.10`],
   },
+  swEinwirkung: {
+    titel: "Einwirkungen und Kombinationsbeiwerte",
+    formeln: ["G ständig, Q veränderlich (Nutzlast, Schnee, Wind, Temperatur), A außergewöhnlich", "ψ₀ seltener Wert, ψ₁ häufiger Wert, ψ₂ quasi-ständiger Wert"],
+    text: "Jede Last wird einer Einwirkung zugeordnet. Die Kategorie belegt ψ₀, ψ₁, ψ₂ nach DIN EN 1990/NA vor (z. B. Büro 0,7/0,5/0,3, Schnee bis NN+1000 m 0,5/0,2/0, Wind 0,6/0,2/0); die Werte sind änderbar. Mehrere Lasten gleicher Herkunft gehören zu derselben Einwirkung (sie wirken gemeinsam). Tabellenwerte vor Verwendung an der Norm prüfen.",
+    normen: ["DIN EN 1990/NA, Tab. NA.A.1.1 (ψ-Werte)"],
+  },
+  swTsb: {
+    titel: "Teilsicherheitsbeiwerte und Kombinationen",
+    formeln: [
+      "GZT (6.10): Σ γ<sub>G,j</sub>·G<sub>k,j</sub> + γ<sub>Q</sub>·Q<sub>k,1</sub> + Σ γ<sub>Q</sub>·ψ<sub>0,i</sub>·Q<sub>k,i</sub>",
+      "GZT außergewöhnlich (6.11b): Σ G<sub>k,j</sub> + A<sub>d</sub> + ψ<sub>1,1</sub>·Q<sub>k,1</sub> + Σ ψ<sub>2,i</sub>·Q<sub>k,i</sub>",
+      "GZG charakteristisch (6.14b): Σ G<sub>k,j</sub> + Q<sub>k,1</sub> + Σ ψ<sub>0,i</sub>·Q<sub>k,i</sub>",
+      "GZG häufig (6.15b): Σ G<sub>k,j</sub> + ψ<sub>1,1</sub>·Q<sub>k,1</sub> + Σ ψ<sub>2,i</sub>·Q<sub>k,i</sub>",
+      "GZG quasi-ständig (6.16b): Σ G<sub>k,j</sub> + Σ ψ<sub>2,i</sub>·Q<sub>k,i</sub>",
+    ],
+    text: "Vorbelegung STR/GEO: γ<sub>G,sup</sub> = 1,35, γ<sub>G,inf</sub> = 1,00, γ<sub>Q</sub> = 1,50 (günstig: 0); EQU: 1,10/0,90/1,50. Es werden alle Möglichkeiten gebildet (jede veränderliche Einwirkung als Leiteinwirkung, jede ständige ungünstig oder günstig, veränderliche vorhanden oder nicht) und daraus die Umhüllende. Bei mehr als drei ständigen Einwirkungen wirken sie gemeinsam ungünstig bzw. günstig. Nicht erfasst: Erdbeben, 6.10a/b, Ermüdung. Ergebnisse der Umhüllenden sind nicht gleichzeitig wirkende Extremwerte; einzelne Kombinationen sind wählbar.",
+    normen: ["DIN EN 1990 mit NA, Abschnitte 6.4.3 und Anhang A", "DIN EN 1990/NA, Tab. NA.A.1.2(A) und (B)"],
+  },
   torsion: {
     titel: "Torsion (St. Venant)",
     formeln: [

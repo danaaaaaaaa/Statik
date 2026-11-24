@@ -93,3 +93,11 @@ Nicht enthalten: Temperatur, Stützensenkung, Theorie II. Ordnung, Schubverformu
 
 ## Version 10: Torsion im Stahlbau
 St.-Venant-Torsion: Eingabe T [kNm] je Reiter, Kennwerte I_t/W_t (I, U, T, Hohlprofile, Rohr, Kreis, Rechteck), T_Rd, Abminderung der Querkrafttragfähigkeit nach EN 1993-1-1, 6.2.7 (Gl. 6.26 bis 6.28). Nicht enthalten: Wölbkrafttorsion, Torsionsschubspannungen im Spannungsbild, Polygone und mehrzellige Querschnitte.
+
+## Version 11: Statik – Lastfallkombinationen
+- Neu: `lastfaelle.js` (Einwirkungen G/Q/A, Kombinationen nach DIN EN 1990/NA, Superposition, Umhüllende).
+- Einwirkungstabelle mit Kategorie (ψ₀/ψ₁/ψ₂ vorbelegt, änderbar); jede Last wird einer Einwirkung zugeordnet.
+- Teilsicherheitsbeiwerte vorbelegt (STR/GEO, EQU), änderbar.
+- Kombinationen: GZT (6.10), außergewöhnlich (6.11b), GZG charakteristisch/häufig/quasi-ständig, unfaktoriert; Anzeige als Umhüllende oder Einzelkombination. Schnittgrößen, Auflager, Verformungen erfolgen im Design-Niveau.
+- Grad der statischen Unbestimmtheit n = 3s + r − 3k − g; Koordinatensystem oben links.
+- Vereinfachungen: lineare Superposition (I. Ordnung), kein Erdbeben/Ermüdung, bei mehr als drei ständigen Einwirkungen wirken diese gemeinsam. ψ-/γ-Werte vor Verwendung an der Norm prüfen.

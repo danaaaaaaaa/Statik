@@ -207,6 +207,30 @@ class Stabwerk {
     return ({ fest: [0, 1], rolleZ: [1], rolleX: [0], einsp: [0, 1, 2] })[k.lager] || [];
   }
 
+  /**
+   * Grad der statischen Unbestimmtheit (Abzählkriterium): n = 3·s + r − 3·k − g
+   * s Stäbe, r Auflagerreaktionen, k Knoten (nur an Stäben), g Gelenkbedingungen
+   * (je Knoten: Anzahl gelenkiger Stabenden; sind alle Stabenden gelenkig und der Knoten nicht drehfest gelagert, eines weniger).
+   * n < 0: Mechanismus; n = 0 statisch bestimmt (bei geeigneter Lagerung); n > 0 statisch unbestimmt.
+   */
+  static unbestimmtheit(m) {
+    const knoten = new Set();
+    m.staebe.forEach(s => { knoten.add(s.i); knoten.add(s.j); });
+    let r = 0, g = 0;
+    for (const nr of knoten) {
+      const k = m.knoten[nr - 1]; if (!k) continue;
+      r += Stabwerk.gehalten(k).length;
+      let anzahl = 0, gelenke = 0;
+      for (const s of m.staebe) {
+        if (s.i === nr) { anzahl++; if (s.gel === "anfang" || s.gel === "beide") gelenke++; }
+        if (s.j === nr) { anzahl++; if (s.gel === "ende" || s.gel === "beide") gelenke++; }
+      }
+      g += gelenke === anzahl && anzahl > 0 && !k.hphi && k.lager !== "einsp" ? gelenke - 1 : gelenke;
+    }
+    const s = m.staebe.length, k = knoten.size;
+    return { n: 3 * s + r - 3 * k - g, s, k, r, g };
+  }
+
   /** Eingaben prüfen; gibt Fehlertext oder null zurück. */
   pruefe() {
     const m = this.m, nK = m.knoten.length, ok = Number.isFinite;
