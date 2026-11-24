@@ -593,12 +593,17 @@ class StahlbauSeite {
     document.getElementById("st-gm0").addEventListener("input", () => this.aktualisiere());
     // Schnittgrößen gehören zum Reiter: Änderung wird im aktiven Reiter gespeichert
     for (const id of SchnittgroessenIds) document.getElementById(id).addEventListener("input", () => this.wahl.cb());
-    // Schnittgrößen aus einem wählbaren anderen Reiter in den aktuellen Reiter kopieren
-    document.getElementById("sg-uebernehmen").addEventListener("click", () => {
-      const i = Number(document.getElementById("sg-quelle").value);
-      const z = this.wahl.slots[i] && this.wahl.slots[i].zusatz;
-      if (z && i !== this.wahl.aktiv) { this.wahl.zusatz.setzen(z); this.wahl.cb(); }
-    });
+    // Schnittgrößen aus einem anderen Reiter in den aktuellen Reiter kopieren (sechs Knöpfe wie bei den Reitern)
+    const quelle = document.getElementById("sg-quelle");
+    for (let i = 0; i < QuerschnittWahl.SLOTS; i++) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "knopf slot"; b.textContent = i + 1;
+      b.addEventListener("click", () => {
+        const z = this.wahl.slots[i] && this.wahl.slots[i].zusatz;
+        if (z && i !== this.wahl.aktiv) { this.wahl.zusatz.setzen(z); this.wahl.cb(); }
+      });
+      quelle.appendChild(b);
+    }
     this.aktualisiere();
   }
 
@@ -635,13 +640,14 @@ class StahlbauSeite {
     this.skizze.zeichne(q, { pna: { y: r.z.lage, z: r.y.lage } });
   }
 
-  /** Auswahl der Quell-Reiter für die Übernahme: alle anderen Reiter, die Schnittgrößen gespeichert haben. */
+  /** Quell-Knöpfe: nur belegte, nicht aktive Reiter sind anklickbar. */
   _quellReiter() {
-    const sel = document.getElementById("sg-quelle"), alt = sel.value, w = this.wahl;
-    const frei = (w.slots || []).map((z, i) => (z && z.zusatz && i !== w.aktiv ? i : -1)).filter(i => i >= 0);
-    sel.innerHTML = frei.map(i => `<option value="${i}">aus Reiter ${i + 1}</option>`).join("");
-    if (frei.map(String).includes(alt)) sel.value = alt;
-    sel.disabled = document.getElementById("sg-uebernehmen").disabled = !frei.length;
+    const w = this.wahl;
+    [...document.getElementById("sg-quelle").children].forEach((b, i) => {
+      const z = w.slots && w.slots[i];
+      b.disabled = !(z && z.zusatz) || i === w.aktiv;
+      b.title = i === w.aktiv ? "aktueller Reiter" : z && z.zusatz ? `Schnittgrößen aus Reiter ${i + 1} übernehmen` : `Reiter ${i + 1} ist leer`;
+    });
   }
 
   /** Schalter E-E / E-P aktualisieren: E-P ist bei Klasse 3/4 oder unbekannter Klasse gesperrt. */
@@ -786,18 +792,18 @@ class SBSkizze {
         g.beginPath(); g.rect(xz - breiteSig(sp.sigC), Math.min(Y(zp(0)), Y(zp(res.sBlock))), breiteSig(sp.sigC), Math.abs(Y(zp(res.sBlock)) - Y(zp(0))));
       },
     };
-    const anderes = res.modus === "pr" ? "block" : "pr";
+    const anderes = res.linie === "pr" ? "block" : "pr";
     // Vergleichsmodell gestrichelt
     g.save(); g.setLineDash([4, 3]); g.strokeStyle = "#7a8fb5"; g.lineWidth = 1.2; modelle[anderes](); g.stroke(); g.restore();
     // gewähltes Modell gefüllt
     g.fillStyle = "rgba(40,90,200,0.35)"; g.strokeStyle = "#1f4e9a"; g.lineWidth = 1.6;
-    modelle[res.modus](); g.fill(); g.stroke();
+    modelle[res.linie](); g.fill(); g.stroke();
 
     // Betonspannung am Druckrand und Knickpunkt ε_c2 (Übergang Parabel -> Rechteck)
     g.fillStyle = "#111"; g.textAlign = "left";
     const yTop = Y(zp(0));
     g.fillText(`−${fmt(sp.sigCmax, 1)}`, xz - breiteSig(sp.sigCmax) - 2, yTop + (res.negativ ? -5 : 12));
-    if (res.modus === "pr" && sp.epsTop > res.epsC2) {
+    if (res.linie === "pr" && sp.epsTop > res.epsC2) {
       const zk = res.x * (1 - res.epsC2 / sp.epsTop);          // Tiefe, in der ε_c = ε_c2 erreicht wird
       g.save(); g.setLineDash([2, 3]); g.strokeStyle = "#1f4e9a"; g.lineWidth = 1;
       g.beginPath(); g.moveTo(xz - bMax - 2, Y(zp(zk))); g.lineTo(xz + 2, Y(zp(zk))); g.stroke(); g.restore();
@@ -818,7 +824,7 @@ class SBSkizze {
     if (res.As2 > 0) pfeil(Y(zp(q.d2)), -sp.sigS2, "#1b3a6b");
     g.textAlign = "left";
     g.fillStyle = "#666"; g.fillText("Maßstäbe getrennt", x1 - 2, Y(q.h) + 12);
-    g.fillText(res.modus === "pr" ? "gestrichelt: Spannungsblock" : "gestrichelt: Parabel-Rechteck", x1 - 2, Y(q.h) + 24);
+    g.fillText(res.linie === "pr" ? "gestrichelt: Spannungsblock" : "gestrichelt: Parabel-Rechteck", x1 - 2, Y(q.h) + 24);
   }
 }
 
@@ -830,9 +836,31 @@ class StahlbetonSeite {
     const sel = document.getElementById("sb-beton");
     BETONKLASSEN.forEach(k => sel.add(new Option(k[0], k[0])));
     sel.value = "C30/37";
+    // Durchmesser
+    const dm = (id, liste, std) => { const e = document.getElementById(id); liste.forEach(d => e.add(new Option(d, d))); e.value = std; };
+    dm("sb-ds", [8, 10, 12, 14, 16, 20, 25, 28, 32], 20);
+    dm("sb-dsd", [8, 10, 12, 14, 16, 20, 25, 28, 32], 16);
+    dm("sb-dsw", [6, 8, 10, 12], 8);
+    // Expositionsklassen: je Gruppe eine Auswahl
+    const box = document.getElementById("sb-expo");
+    for (const [g, def] of Object.entries(Expositionsklassen.GRUPPEN)) {
+      const lab = document.createElement("label");
+      lab.innerHTML = `<span>${def.titel}</span>`;
+      const e = document.createElement("select"); e.id = "sb-x-" + g; e.add(new Option("–", ""));
+      def.klassen.forEach(k => e.add(new Option(`${k.id} – ${k.text}`, k.id)));
+      lab.appendChild(e); box.appendChild(lab);
+    }
+    document.getElementById("sb-x-XC").value = "XC1";
 
-    const ids = ["sb-typ", "sb-b", "sb-h", "sb-bf", "sb-hf", "sb-d1", "sb-d2", "sb-beton", "sb-stahl", "sb-linie", "sb-M"];
+    const ids = ["sb-typ", "sb-b", "sb-h", "sb-bf", "sb-hf", "sb-d1", "sb-d2", "sb-beton", "sb-stahl", "sb-linie", "sb-M", "sb-N",
+      "sb-nutz", "sb-bauteil", "sb-ds", "sb-dsd", "sb-dsw", "sb-nl", "sb-dg", "sb-dev", "sb-dmodus",
+      ...Object.keys(Expositionsklassen.GRUPPEN).map(g => "sb-x-" + g)];
     ids.forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
+    // Betonklasse aus dem Ergebnis übernehmen
+    document.getElementById("sb-ergebnis").addEventListener("click", e => {
+      const k = e.target.closest(".set-beton");
+      if (k) { document.getElementById("sb-beton").value = k.dataset.klasse; this.aktualisiere(); }
+    });
     this.aktualisiere();
   }
 
@@ -840,20 +868,47 @@ class StahlbetonSeite {
   zeige() { this.aktualisiere(); }
 
   aktualisiere() {
-    const typ = document.getElementById("sb-typ").value;
+    const val = id => document.getElementById(id).value;
+    const typ = val("sb-typ"), platte = val("sb-bauteil") === "platte", auto = val("sb-dmodus") === "auto";
     document.querySelectorAll(".nur-pb").forEach(el => el.classList.toggle("versteckt", typ !== "plattenbalken"));
+    document.querySelectorAll(".nur-balken").forEach(el => el.classList.toggle("versteckt", platte));
     document.getElementById("sb-lbl-b").innerHTML = typ === "plattenbalken" ? "Stegbreite b<sub>w</sub> [cm]" : "Breite b [cm]";
+    ["sb-d1", "sb-d2"].forEach(id => { document.getElementById(id).readOnly = auto; });
 
     const box = document.getElementById("sb-ergebnis");
     try {
-      const q = new SBQuerschnitt({
-        typ, b: zahl("sb-b"), h: zahl("sb-h"), bf: zahl("sb-bf"), hf: zahl("sb-hf"),
-        d1: zahl("sb-d1"), d2: zahl("sb-d2"),
-      });
-      const beton = Beton.aus(document.getElementById("sb-beton").value);
-      const res = new Biegebemessung(q, beton, new Betonstahl()).bemesse(zahl("sb-M"), document.getElementById("sb-linie").value);
+      const beton = Beton.aus(val("sb-beton"));
+      const MEd = zahl("sb-M"), NEd = zahl("sb-N");
+      const ds = Number(val("sb-ds")), dsD = Number(val("sb-dsd")), dsw = platte ? 0 : Number(val("sb-dsw"));
+      const dg = Number(val("sb-dg")), dev = zahl("sb-dev");
+      if (dev < 0) throw new Error("Das Vorhaltemaß darf nicht negativ sein.");
+
+      // Expositionsklasse -> Mindestfestigkeit und c_min,dur; Betondeckung
+      const gew = Object.keys(Expositionsklassen.GRUPPEN).map(g => val("sb-x-" + g)).filter(Boolean);
+      const expo = Expositionsklassen.bewerte(gew, { nutzung100: val("sb-nutz") === "100", platte, fck: beton.fck });
+      const dk = Betondeckung.berechne(expo.cminDur, Math.max(ds, dsD), dsw, dev);
+
+      // Geometrie in mm; Breite der Zugzone (Plattenbalken mit Zug oben: Gurtbreite)
+      const bh = { b: zahl("sb-b") * 10, h: zahl("sb-h") * 10 };
+      const bZug = typ === "plattenbalken" && MEd < 0 ? zahl("sb-bf") * 10 : bh.b;
+      const wahl = new Bewehrungswahl({ b: bZug, h: bh.h, cnom: dk.cnom, dsw, dg, platte });
+      const nl = Math.max(0, Math.floor(zahl("sb-nl")));
+      const d2 = dk.cnom + dsw + dsD / 2;                              // Druckbewehrung: einlagig angenommen
+
+      // d1 hängt von Lagenzahl (also von A_s1) ab und umgekehrt: iterativ lösen
+      let d1 = dk.cnom + dsw + ds / 2, res, q, lay;
+      for (let i = 0; i < 12; i++) {
+        q = new SBQuerschnitt({ typ, b: zahl("sb-b"), h: zahl("sb-h"), bf: zahl("sb-bf"), hf: zahl("sb-hf"),
+          d1: (auto ? d1 : zahl("sb-d1") * 10) / 10, d2: (auto ? d2 : zahl("sb-d2") * 10) / 10 });
+        res = new Biegebemessung(q, beton, new Betonstahl()).bemesse(MEd, val("sb-linie"), NEd);
+        if (res.fehler) break;
+        lay = platte ? wahl.flaechig(res.As1, ds) : wahl.balken(res.As1, ds, nl);
+        if (!auto || Math.abs(lay.d1 - d1) < 0.05) break;
+        d1 = lay.d1;
+      }
       res.epsC2 = beton.epsC2; res.nPR = beton.nPR;   // für Tabelle und Skizze
-      this.zeigeErgebnis(box, res);
+      if (auto) { document.getElementById("sb-d1").value = +(q.d1 / 10).toFixed(2); document.getElementById("sb-d2").value = +(q.d2 / 10).toFixed(2); }
+      this.zeigeErgebnis(box, res, { beton, expo, dk, wahl, lay, ds, dsD, dsw, auto, q, platte, nl });
       this.skizze.zeichne(q, res);
     } catch (e) {
       box.innerHTML = `<span class="fehler">${e.message}</span>`;
@@ -861,14 +916,15 @@ class StahlbetonSeite {
     }
   }
 
-  zeigeErgebnis(box, r) {
+  zeigeErgebnis(box, r, x) {
     if (r.fehler) { box.innerHTML = `<span class="fehler">${r.fehler}</span>`; this.skizze.leeren(); return; }
     const haken = ok => ok ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>';
+    const verfahren = { block: "rechteckiger Spannungsblock", omega: "ω-Verfahren (Parabel-Rechteck, dimensionslos)", pr: "Parabel-Rechteck-Diagramm" }[r.modus];
 
-    let h = `<b>${r.fall}</b> – ${r.druckzone}${r.negativ ? " (Zug oben)" : ""}<br><span class="hinweis">Betonarbeitslinie: ${r.modus === "pr" ? "Parabel-Rechteck-Diagramm" : "rechteckiger Spannungsblock"}</span><table>`;
+    let h = `<b>${r.fall}</b> – ${r.druckzone}${r.negativ ? " (Zug oben)" : ""}<br><span class="hinweis">Verfahren: ${verfahren}</span><table>`;
     h += zeile(lbl("f<sub>cd</sub>", "fcd"), fmt(r.fcd), "N/mm²");
     h += zeile(lbl("f<sub>yd</sub>", "fyd"), fmt(r.fyd), "N/mm²");
-    if (r.modus === "pr") {
+    if (r.linie === "pr") {
       h += zeile(lbl("n (Parabel-Rechteck)", "arbeitslinie"), fmt(r.nPR, 2), "–");
       h += zeile("ε<sub>c2</sub>", fmt(r.epsC2, 1), "‰");
     } else {
@@ -876,15 +932,44 @@ class StahlbetonSeite {
       h += zeile("η", fmt(r.eta), "–");
     }
     h += zeile(lbl("ε<sub>cu2</sub>", "epsCu2"), fmt(r.epsCu2, 1), "‰");
+    if (r.NEd !== 0) {
+      h += zeile(lbl("N<sub>Ed</sub>", "NEdSb"), fmt(r.NEd, 1), r.NEd < 0 ? "kN (Druck)" : "kN (Zug)");
+      h += zeile("z<sub>s1</sub> (Zugbew. – Betonschwerpunkt)", fmt(r.zs1 / 10, 1), "cm");
+      h += zeile("M<sub>Eds</sub> = M<sub>Ed</sub> − N<sub>Ed</sub>·z<sub>s1</sub>", fmt(r.MEds, 1), "kNm");
+    }
     h += zeile(lbl("Nutzhöhe d","d"), fmt(r.d / 10, 1), "cm");
     h += zeile(lbl("Druckzonenhöhe x","x"), fmt(r.x / 10, 1), "cm");
     h += zeile(lbl(`ξ = x/d (≤ ${fmt(r.xiLim, 2)})`,"xi"), fmt(r.xi, 3), haken(r.xiOk));
+    h += "</table>";
+
+    // ω-Verfahren: dimensionslose Größen
+    if (r.omega) {
+      const o = r.omega;
+      h += `<p><b>ω-Verfahren</b> ${infoBtn("arbeitslinie")}</p><table>`;
+      h += zeile("μ<sub>Eds</sub> = M<sub>Eds</sub> / (b·d²·f<sub>cd</sub>)", fmt(o.mu, 4), "–");
+      if (r.As2 > 0) {
+        h += zeile("μ<sub>Eds,lim</sub> (bei ξ<sub>lim</sub>)", fmt(o.muLim, 4), "–");
+        h += zeile("ω<sub>1,lim</sub>", fmt(o.omega1lim, 4), "–");
+        h += zeile("Δω = (μ<sub>Eds</sub> − μ<sub>Eds,lim</sub>) / (1 − d<sub>2</sub>/d)", fmt(o.domega, 4), "–");
+        h += zeile("ω<sub>2</sub>", fmt(o.omega2, 4), "–");
+      } else {
+        h += zeile("ζ = z/d", fmt(o.zeta, 3), "–");
+      }
+      h += zeile("ω<sub>1</sub>", fmt(o.omega1, 4), "–");
+      h += zeile("σ<sub>sd</sub>", fmt(o.sigmaSd, 1), "N/mm²");
+      h += zeile("A<sub>s1</sub> = (ω<sub>1</sub>·b·d·f<sub>cd</sub> + N<sub>Ed</sub>) / σ<sub>sd</sub>", fmt(r.As1erf / 100), "cm²");
+      h += "</table>";
+    }
+
+    h += "<table>";
     h += zeile(lbl("A<sub>s1</sub> erforderlich","As1erf"), fmt(r.As1erf / 100), "cm²");
     h += zeile(lbl("A<sub>s,min</sub>","Asmin"), fmt(r.AsMin / 100), "cm²");
     h += zeile(lbl("<b>A<sub>s1</sub> maßgebend</b>","As1"), `<b>${fmt(r.As1 / 100)}</b>`, "cm²");
     if (r.As2 > 0) h += zeile(lbl("<b>A<sub>s2</sub> (Druckbewehrung)</b>","As2"), `<b>${fmt(r.As2 / 100)}</b>`, "cm²");
     h += zeile(lbl("A<sub>s,max</sub>","Asmax"), fmt(r.AsMax / 100), haken(r.AsMaxOk) + " cm²");
     h += "</table>";
+
+    h += this._expositionHtml(x, haken) + this._bewehrungHtml(r, x, haken);
 
     // Dehnungsebene über die relevanten Ebenen
     const dn = r.dehnung;
@@ -905,18 +990,67 @@ class StahlbetonSeite {
       h += `<p><b>Spannungen</b> ${infoBtn("sbSpannung")}</p><table>`;
       h += zeile("Beton σ<sub>c</sub> am Druckrand", fmt(-sp.sigCmax, 1), "N/mm²");
       h += zeile("Betondruckkraft F<sub>c</sub>", fmt(r.Fc / 1e3, 0), "kN");
-      h += zeile(r.modus === "pr" ? "Druckzonenhöhe x" : "Höhe des Blocks λ·x", fmt(r.s / 10, 1), "cm");
+      h += zeile(r.linie === "pr" ? "Druckzonenhöhe x" : "Höhe des Blocks λ·x", fmt(r.s / 10, 1), "cm");
       h += zeile("Zugbewehrung σ<sub>s1</sub>", fmt(sp.sigS1, 1), "N/mm²");
       if (r.As2 > 0) h += zeile("Druckbewehrung σ<sub>s2</sub>", fmt(-sp.sigS2, 1), "N/mm²");
       h += "</table>";
     }
 
-    h += `<p><b>Bewehrungsvorschlag A<sub>s1</sub></b> ${infoBtn("bewehrung")}</p>` + "<table><tr><th>Ø [mm]</th><th>Anzahl</th><th>A<sub>s,vorh</sub> [cm²]</th></tr>";
-    for (const v of Biegebemessung.vorschlag(r.As1)) h += `<tr><td>Ø ${v.dm}</td><td>${v.n}</td><td>${fmt(v.As / 100)}</td></tr>`;
-    h += "</table>";
-
     if (r.hinweise.length) h += "<ul>" + r.hinweise.map(t => `<li>${t}</li>`).join("") + "</ul>";
     box.innerHTML = h;
+  }
+
+  /** Expositionsklasse: erforderliche Festigkeitsklasse und Betondeckung. */
+  _expositionHtml(x, haken) {
+    const { expo, dk, beton } = x;
+    const ok = beton.fck >= expo.fckMin;
+    let h = `<p><b>Expositionsklasse und Betondeckung</b> ${infoBtn("sbDeckung")}</p><table>`;
+    h += zeile("Maßgebende Klasse", expo.massgebend, "");
+    h += zeile("Mindestfestigkeitsklasse", `<b>${expo.klasseMin}</b>`, "");
+    h += zeile("gewählter Beton " + beton.name, ok ? "ausreichend" : `<button type="button" class="set-beton" data-klasse="${expo.klasseMin}">${expo.klasseMin} wählen</button>`, haken(ok));
+    h += zeile("Strukturklasse", "S" + expo.strukturklasse, "");
+    h += zeile("c<sub>min,dur</sub>", fmt(expo.cminDur, 0), "mm");
+    h += zeile("c<sub>min,b</sub> (Verbund)", fmt(dk.cminB, 0), "mm");
+    h += zeile("c<sub>min</sub> = max(c<sub>min,b</sub>; c<sub>min,dur</sub>; 10)", fmt(dk.cmin, 0), "mm");
+    h += zeile("Δc<sub>dev</sub>", fmt(dk.dev, 0), "mm");
+    h += zeile("<b>c<sub>nom</sub></b>", `<b>${fmt(dk.cnom, 0)}</b>`, "mm");
+    h += "</table>";
+    if (expo.schritte.length) h += `<p class="hinweis">Strukturklasse: Start S4; ${expo.schritte.join("; ")}.</p>`;
+    return h;
+  }
+
+  /** Gewählte Bewehrung: Stabanzahl, Lagen, Abstände im Vergleich mit den Normwerten, d1-Kontrolle. */
+  _bewehrungHtml(r, x, haken) {
+    const { lay, wahl, ds, dsD, auto, q, platte } = x;
+    const A1 = Math.PI * ds * ds / 4;
+    let h = `<p><b>Gewählte Bewehrung A<sub>s1</sub></b> ${infoBtn("sbLage")}</p><table>`;
+    h += zeile("Zugbewehrung", `<b>${lay.n} Ø${ds}</b>`,
+      platte ? `je ${fmt(q.bf / 10, 0)} cm` : `${lay.lagen} Lage${lay.lagen > 1 ? "n" : ""} (${lay.proLage.join(" + ")} Stäbe)`);
+    h += zeile("A<sub>s,vorh</sub> ≥ A<sub>s1</sub>", fmt(lay.As / 100), haken(lay.As + 1e-6 >= r.As1) + " cm²");
+    if (platte) {
+      h += zeile("Stababstand s (Achsabstand)", fmt(lay.s, 0), "mm");
+      h += zeile("lichter Abstand vorhanden / a<sub>min</sub>", `${fmt(lay.avh, 0)} / ${fmt(lay.amin, 0)}`, haken(lay.okMin) + " mm");
+      h += zeile("Achsabstand s / s<sub>max</sub>", `${fmt(lay.s, 0)} / ${fmt(lay.smax, 0)}`, haken(lay.okMax) + " mm");
+    } else {
+      h += zeile("lichter Abstand a<sub>vorh</sub> (horizontal)", lay.avh === null ? "–" : fmt(lay.avh, 0), "mm");
+      h += zeile("Mindestabstand a<sub>min</sub>", fmt(lay.amin, 0), haken(lay.ok) + " mm");
+      h += zeile("max. Stäbe je Lage", fmt(lay.nMax, 0), "");
+    }
+    h += zeile("d<sub>1</sub> aus Deckung und Verlegung", fmt(lay.d1 / 10, 2), "cm");
+    if (!auto) h += zeile("d<sub>1</sub> angesetzt (manuell)", fmt(q.d1 / 10, 2), haken(q.d1 + 1e-6 >= lay.d1) + " cm");
+    if (r.As2 > 0) {
+      const l2 = platte ? wahl.flaechig(r.As2, dsD) : wahl.balken(r.As2, dsD, 0);
+      h += zeile("Druckbewehrung", `<b>${l2.n} Ø${dsD}</b>`, `A<sub>s,vorh</sub> = ${fmt(l2.As / 100)} cm² ${haken(l2.As + 1e-6 >= r.As2)}`);
+      h += zeile("lichter Abstand / a<sub>min</sub>", `${l2.avh === null ? "–" : fmt(l2.avh, 0)} / ${fmt(l2.amin, 0)}`, haken(platte ? l2.okMin : l2.ok) + " mm");
+      if (!platte && l2.lagen > 1) h += zeile("Hinweis", "Druckbewehrung mehrlagig", "d₂ gilt für eine Lage");
+    }
+    h += "</table>";
+    if (!lay.ok) h += `<p class="fehler">Stababstand verletzt den Grenzwert (${lay.grenzText}). Kleineren Durchmesser, weniger Stäbe je Lage oder breiteren Querschnitt wählen.</p>`;
+    else h += `<p class="hinweis">Grenzwerte: ${lay.grenzText}.</p>`;
+    h += "<table><tr><th>Alternative Ø [mm]</th><th>Anzahl</th><th>A<sub>s,vorh</sub> [cm²]</th></tr>";
+    for (const v of Biegebemessung.vorschlag(r.As1)) h += `<tr><td>Ø ${v.dm}</td><td>${v.n}</td><td>${fmt(v.As / 100)}</td></tr>`;
+    h += "</table><p class=\"hinweis\">Alternativen gelten ohne Neuermittlung von d<sub>1</sub> und Abständen.</p>";
+    return h;
   }
 }
 
@@ -924,12 +1058,14 @@ class StahlbetonSeite {
 
 /** Bereiche der App: Titel und zugehörige Seite (Sektion im HTML). */
 const BEREICHE = {
+  statik: { titel: "Statik", sektion: "statik" },
   stahlbau: { titel: "Stahlbau", sektion: "stahlbau" },
   massivbau: { titel: "Massivbau", sektion: "stahlbeton" },
 };
 
 class App {
   constructor() {
+    this.statik = new StatikSeite();
     this.stahlbau = new StahlbauSeite();
     this.massivbau = new StahlbetonSeite();
     this.info = new InfoPanel();
@@ -945,7 +1081,7 @@ class App {
     const b = BEREICHE[name];
     this.zeigeSeite(b.sektion, b.titel, `${b.titel} – Statik-Rechner`);
     // Zeichenflächen sind erst jetzt sichtbar und werden neu gezeichnet
-    (name === "stahlbau" ? this.stahlbau : this.massivbau).zeige();
+    ({ statik: this.statik, stahlbau: this.stahlbau, massivbau: this.massivbau })[name].zeige();
   }
 
   zeigeSeite(sektion, titel, dokumentTitel) {

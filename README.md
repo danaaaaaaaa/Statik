@@ -75,3 +75,18 @@ unter gleichem Namen erneut hochladen. Danach 1–2 Minuten warten und die Seite
 ## Version 8
 - Reiter 1–6 speichern neben dem Querschnitt auch die Schnittgrößen (N, V_y, V_z, M_y, M_z); Knopf „Schnittgrößen aus Reiter 1 übernehmen" (nur aktiv, wenn nicht Reiter 1 aktiv ist). Allgemein: `QuerschnittWahl` hat einen optionalen Parameter `zusatz {holen, setzen}` für weitere reiterbezogene Eingaben.
 - Neues Layout Stahlbau: Querschnittswerte in zwei Tabellen (Geometrie | Widerstände) neben Skizze und Klassifizierung; darunter Spannungen | Tragfähigkeit + „Spannungen an Punkten". Die Eingabespalte ist dadurch kürzer.
+
+## Version 9: Statik und Massivbau-Erweiterung
+
+**Statik (neu, `#statik`)** – `stabwerk.js` (Rechenkern) und `stabwerk-ui.js` (Eingabetabellen, Zeichnung, Ergebnisse).
+Ebene Stabwerke, Direkte Steifigkeitsmethode, Theorie I. Ordnung, linear-elastisch, Euler-Bernoulli. Einheiten m, kN, kNm; X nach rechts, Z nach unten.
+Eingabe: Knoten mit Lager, Stäbe (A, I, Momentengelenke), Knoten-, Strecken- und Einzellasten. Ausgabe: N-, V-, M-Verlauf, Verformung, Auflagerkräfte, Knotenverschiebungen, Extremwerte.
+Nicht enthalten: Temperatur, Stützensenkung, Theorie II. Ordnung, Schubverformung.
+
+**Massivbau** – `stahlbeton.js`, `app.js`, `index.html`, `info.js`
+- Normalkraft N_Ed (Zug +, Druck −), Bemessung mit M_Eds = M_Ed − N_Ed·z_s1.
+- Verfahren umschaltbar: Spannungsblock, ω-Verfahren (μ_Eds → ω1, Δω bei Druckbewehrung), Parabel-Rechteck direkt.
+- Expositionsklassen (XC, XD, XS, XF, XA, XM) → Mindestfestigkeitsklasse, Strukturklasse, c_min,dur, c_nom.
+- Durchmesser (Zug, Druck, Bügel), Stäbe je Lage, d1/d2 automatisch aus Deckung und Verlegung (iterativ) oder manuell.
+- Stababstände: lichter Abstand gegen a_min = max(Ø; d_g+5; 20 mm); Platten zusätzlich s_max = min(2h; 250 mm).
+- Tabellenwerte (Mindestfestigkeit, Strukturklasse, c_min,dur) vor Verwendung an der Norm prüfen.

@@ -22,6 +22,11 @@
     <section id="tab-start" class="seite start aktiv">
       <h2>Bereich wählen</h2>
       <div class="karten">
+        <a class="karte" href="#statik">
+          <h3>Statik</h3>
+          <p>Ebene Stabwerke: Knoten, Stäbe, Lager, Gelenke und Lasten eingeben; Schnittgrößen N, V, M, Auflagerkräfte und Verformungen (Theorie I. Ordnung).</p>
+          <span class="los">Öffnen →</span>
+        </a>
         <a class="karte" href="#stahlbau">
           <h3>Stahlbau</h3>
           <p>Querschnitt einmal wählen (Walzprofil, Standardform oder beliebiges Polygon) und auf einer Seite sehen:
@@ -63,10 +68,7 @@
         <p class="hinweis">y nach rechts, z nach unten, Ursprung im Schwerpunkt. N &gt; 0: Zug. M<sub>y</sub> &gt; 0: Zug unten.
           M<sub>z</sub> &gt; 0: Zug rechts. V<sub>z</sub> wirkt parallel zum Steg, V<sub>y</sub> parallel zu den Flanschen
           (nur der Betrag geht in die Nachweise ein).</p>
-        <div class="sg-uebernahme">
-          <select id="sg-quelle" aria-label="Quell-Reiter"></select>
-          <button type="button" class="knopf" id="sg-uebernehmen">Schnittgrößen übernehmen</button>
-        </div>
+        <div class="knoepfe slots sg-uebernahme"><span class="slotname">SG übernehmen aus Reiter</span><span id="sg-quelle" class="knoepfe"></span></div>
 
         <h2>Berechnungsart <button type="button" class="info" data-info="berechnungsart">i</button></h2>
         <div class="knoepfe" id="st-modus">
@@ -117,24 +119,50 @@
             <p class="hinweis">Ziehen = drehen, Mausrad bzw. ＋/− = zoomen. Volle Farbe = Bezugswert (f<sub>yd</sub>, bei τ f<sub>yd</sub>/√3);
               orange gestrichelt: Grenzwert, grün gestrichelt: Nulllinie.</p>
 
+            <h2>Spannungen an Punkten</h2>
+            <div class="raster">
+              <label><span>y [mm]</span><input type="number" id="pt-y" value="0" step="any"></label>
+              <label><span>z [mm]</span><input type="number" id="pt-z" value="0" step="any"></label>
+            </div>
+            <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
+            <table id="pt-tabelle">
+              <thead><tr><th>Punkt</th><th>y</th><th>z</th><th>σ</th><th>τ</th><th>σ<sub>v</sub></th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p class="hinweis" id="pt-hinweis">Koordinaten in mm, Spannungen in N/mm².</p>
+
           </div>
           <div>
             <h2>Tragfähigkeit</h2>
             <div id="tf-ergebnis" class="ergebnis"></div>
-
-            <h2>Spannungen an Punkten</h2>
-        <div class="raster">
-          <label><span>y [mm]</span><input type="number" id="pt-y" value="0" step="any"></label>
-          <label><span>z [mm]</span><input type="number" id="pt-z" value="0" step="any"></label>
-        </div>
-        <p><button class="knopf" id="pt-add">+ Punkt hinzufügen</button></p>
-        <table id="pt-tabelle">
-          <thead><tr><th>Punkt</th><th>y</th><th>z</th><th>σ</th><th>τ</th><th>σ<sub>v</sub></th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <p class="hinweis" id="pt-hinweis">Koordinaten in mm, Spannungen in N/mm².</p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ===== Statik: ebene Stabwerke ===== -->
+    <section id="tab-statik" class="seite">
+      <div class="eingabe">
+        <div class="sw-knopfzeile"><button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
+        <h2>Knoten und Lager</h2><div id="sw-knoten"></div>
+        <p class="hinweis">X nach rechts, Z nach unten (Meter). Rolle (Z gehalten) = verschieblich in X.</p>
+        <h2>Stäbe</h2><div id="sw-staebe"></div>
+        <label><span>E-Modul [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
+        <h2>Knotenlasten</h2><div id="sw-kl"></div>
+        <h2>Streckenlasten</h2><div id="sw-str"></div>
+        <h2>Einzellasten</h2><div id="sw-ein"></div>
+        <p class="hinweis">Lasten positiv in Richtung +X bzw. +Z (nach unten). a = Abstand vom Stabanfang. Lokal z' liegt bei waagerechtem Stab unten.</p>
+      </div>
+      <div class="ergebnisse">
+        <div class="raster">
+          <label><span>Darstellung</span><select id="sw-art">
+            <option value="system">System und Lasten</option><option value="M" selected>Moment M</option>
+            <option value="V">Querkraft V</option><option value="N">Normalkraft N</option><option value="verf">Verformung</option></select></label>
+          <label><span>Überhöhung (0 = auto)</span><input type="number" id="sw-ueh" value="0" step="any"></label>
+        </div>
+        <canvas id="sw-canvas" style="height:420px"></canvas>
+        <p class="hinweis" id="sw-hinweis"></p>
+        <div id="sw-ergebnis" class="ergebnis"></div>
       </div>
     </section>
 
@@ -153,23 +181,49 @@
           <label><span>Höhe h [cm]</span><input type="number" id="sb-h" value="60" step="any"></label>
           <label class="nur-pb versteckt"><span>b<sub>eff</sub> [cm] <button type="button" class="info" data-info="beff">i</button></span><input type="number" id="sb-bf" value="120" step="any"></label>
           <label class="nur-pb versteckt"><span>h<sub>f</sub> [cm]</span><input type="number" id="sb-hf" value="20" step="any"></label>
-          <label><span>d<sub>1</sub> Zug [cm] <button type="button" class="info" data-info="d1d2">i</button></span><input type="number" id="sb-d1" value="5" step="any"></label>
+          <label style="grid-column:1 / -1"><span>d<sub>1</sub>, d<sub>2</sub> <button type="button" class="info" data-info="d1d2">i</button></span>
+            <select id="sb-dmodus"><option value="auto">aus Deckung und Verlegung berechnen</option><option value="manuell">manuell eingeben</option></select></label>
+          <label><span>d<sub>1</sub> Zug [cm]</span><input type="number" id="sb-d1" value="5" step="any"></label>
           <label><span>d<sub>2</sub> Druck [cm]</span><input type="number" id="sb-d2" value="5" step="any"></label>
         </div>
         <p class="hinweis">b<sub>eff</sub> = Gurtbreite, h<sub>f</sub> = Gurtdicke, d<sub>1</sub>/d<sub>2</sub> = Abstand des
-          Schwerpunkts der Zug-/Druckbewehrung zum jeweiligen Rand.
-          Platte: b = 100 cm setzen, A<sub>s</sub> gilt dann je Meter.</p>
+          Schwerpunkts der Zug-/Druckbewehrung zum jeweiligen Rand. Platte: b = 100 cm setzen, A<sub>s</sub> gilt dann je Meter.</p>
 
-        <h2>Baustoffe</h2>
+        <h2>Baustoffe und Verfahren</h2>
         <div class="raster">
           <label><span>Beton <button type="button" class="info" data-info="sbBeton">i</button></span><select id="sb-beton"></select></label>
           <label><span>Betonstahl <button type="button" class="info" data-info="sbStahl">i</button></span><select id="sb-stahl"><option>B500B</option></select></label>
-          <label style="grid-column:1 / -1"><span>Betonarbeitslinie <button type="button" class="info" data-info="arbeitslinie">i</button></span>
-            <select id="sb-linie"><option value="pr">Parabel-Rechteck-Diagramm</option><option value="block">Rechteckiger Spannungsblock</option></select></label>
+          <label style="grid-column:1 / -1"><span>Bemessungsverfahren <button type="button" class="info" data-info="arbeitslinie">i</button></span>
+            <select id="sb-linie">
+              <option value="block">Rechteckiger Spannungsblock</option>
+              <option value="omega">ω-Verfahren (μ<sub>Eds</sub> → ω<sub>1</sub>)</option>
+              <option value="pr">Parabel-Rechteck-Diagramm (direkt)</option>
+            </select></label>
         </div>
 
         <h2>Einwirkung</h2>
-        <label><span>M<sub>Ed</sub> [kNm] (negativ = Zug oben) <button type="button" class="info" data-info="MEd">i</button></span><input type="number" id="sb-M" value="250" step="any"></label>
+        <div class="raster">
+          <label><span>M<sub>Ed</sub> [kNm] <button type="button" class="info" data-info="MEd">i</button></span><input type="number" id="sb-M" value="250" step="any"></label>
+          <label><span>N<sub>Ed</sub> [kN] <button type="button" class="info" data-info="NEdSb">i</button></span><input type="number" id="sb-N" value="0" step="any"></label>
+        </div>
+        <p class="hinweis">M<sub>Ed</sub> &gt; 0: Zug unten, &lt; 0: Zug oben. N<sub>Ed</sub> &gt; 0: Zug, &lt; 0: Druck (im Betonschwerpunkt).</p>
+
+        <h2>Expositionsklasse</h2>
+        <div class="raster" id="sb-expo"></div>
+        <div class="raster">
+          <label><span>Nutzungsdauer</span><select id="sb-nutz"><option value="50">50 Jahre</option><option value="100">100 Jahre</option></select></label>
+          <label><span>Bauteil <button type="button" class="info" data-info="sbBauteil">i</button></span><select id="sb-bauteil"><option value="balken">Balken / Stütze (Lagen)</option><option value="platte">Platte (Stäbe je Breite)</option></select></label>
+        </div>
+
+        <h2>Bewehrung und Deckung</h2>
+        <div class="raster">
+          <label><span>Ø Zugbewehrung [mm]</span><select id="sb-ds"></select></label>
+          <label><span>Ø Druckbewehrung [mm]</span><select id="sb-dsd"></select></label>
+          <label class="nur-balken"><span>Ø Bügel [mm]</span><select id="sb-dsw"></select></label>
+          <label class="nur-balken"><span>Stäbe je Lage (0 = max.) <button type="button" class="info" data-info="sbLage">i</button></span><input type="number" id="sb-nl" value="0" min="0" step="1"></label>
+          <label><span>Größtkorn d<sub>g</sub> [mm]</span><select id="sb-dg"><option>8</option><option selected>16</option><option>32</option></select></label>
+          <label><span>Vorhaltemaß Δc<sub>dev</sub> [mm] <button type="button" class="info" data-info="sbDeckung">i</button></span><input type="number" id="sb-dev" value="10" step="1"></label>
+        </div>
       </div>
 
       <div class="ergebnisse">
@@ -191,6 +245,8 @@
   <script src="tragfaehigkeit.js"></script>
   <script src="ansicht3d.js"></script>
   <script src="stahlbeton.js"></script>
+  <script src="stabwerk.js"></script>
+  <script src="stabwerk-ui.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

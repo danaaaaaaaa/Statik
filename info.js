@@ -205,9 +205,11 @@ const INFO = {
       "ε<sub>c2</sub> ≤ ε<sub>c</sub> ≤ ε<sub>cu2</sub>: σ<sub>c</sub> = f<sub>cd</sub>",
       "f<sub>ck</sub> ≤ 50 N/mm²: n = 2,0, ε<sub>c2</sub> = 2,0 ‰, ε<sub>cu2</sub> = 3,5 ‰",
       "Spannungsblock: Höhe λ·x, Spannung η·f<sub>cd</sub>",
+      "ω-Verfahren: μ<sub>Eds</sub> = M<sub>Eds</sub> / (b·d²·f<sub>cd</sub>) → ω<sub>1</sub>, ξ, ζ; A<sub>s1</sub> = (ω<sub>1</sub>·b·d·f<sub>cd</sub> + N<sub>Ed</sub>) / σ<sub>sd</sub>",
     ],
     text: "Beim Parabel-Rechteck-Diagramm wird die Betonspannung an jeder Stelle der Druckzone aus der Dehnungsebene bestimmt; die Druckkraft und ihr Moment ergeben sich durch numerische Integration über die Druckzone (Plattenbalken mit Gurtbreite). " +
-      "Der Spannungsblock ist die vereinfachte Ersatzform; beide Verfahren sind zulässig und liefern ähnliche Bewehrungsmengen. In Bereich 2 ist die Betonstauchung kleiner als ε<sub>cu2</sub> (ε<sub>c</sub> = 25 ‰·x/(d − x)).",
+      "Das ω-Verfahren ist die dimensionslose (tabellarische) Form dieser Bemessung mit dem Parabel-Rechteck-Diagramm: aus μ<sub>Eds</sub> folgt ω<sub>1</sub>; mit Druckbewehrung werden ω<sub>1</sub> und ω<sub>2</sub> über Δω bestimmt. Hier werden die Tafelwerte numerisch berechnet (σ<sub>sd</sub> = f<sub>yd</sub>, ohne Verfestigung). " +
+      "Der Spannungsblock ist die vereinfachte Ersatzform; alle Verfahren sind zulässig und liefern ähnliche Bewehrungsmengen. In Bereich 2 ist die Betonstauchung kleiner als ε<sub>cu2</sub> (ε<sub>c</sub> = 25 ‰·x/(d − x)).",
     normen: [`${EC2}, 3.1.7(1), Bild 3.3, Gl. (3.17), (3.18)`, `${EC2}, 3.1.7(3), Bild 3.5 (Spannungsblock)`, `${EC2}, Tab. 3.1 (ε<sub>c2</sub>, ε<sub>cu2</sub>, n)`],
   },
   sbSpannung: {
@@ -496,6 +498,43 @@ const INFO = {
     text: "Rechteckiger Spannungsblock: Höhe λ·x, Spannung η·f<sub>cd</sub>.",
     normen: [`${EC2}, 3.1.7(3), Bild 3.5, Gl. (3.19) bis (3.22)`],
   },
+  NEdSb: {
+    titel: "Normalkraft N<sub>Ed</sub> (Massivbau)",
+    formeln: [
+      "M<sub>Eds</sub> = M<sub>Ed</sub> − N<sub>Ed</sub>·z<sub>s1</sub> &nbsp;(N<sub>Ed</sub> &gt; 0 Zug, &lt; 0 Druck)",
+      "z<sub>s1</sub> = Abstand der Zugbewehrung vom Schwerpunkt des Betonquerschnitts",
+      "A<sub>s1</sub> = ( F<sub>c</sub> + N<sub>Ed</sub> ) / f<sub>yd</sub>",
+    ],
+    text: "Die Normalkraft wirkt im Schwerpunkt des Betonquerschnitts. Bemessung um die Zugbewehrung: das Moment wird auf die Zugbewehrung bezogen, die Zugkraft der Bewehrung um N<sub>Ed</sub> verändert. " +
+      "Nicht erfasst: Stabilität/Theorie II. Ordnung, überwiegender Zug (M<sub>Eds</sub> &lt; 0), Bemessung von Druckgliedern mit voll überdrücktem Querschnitt.",
+    normen: [`${EC2}, 6.1 (Biegung mit Längskraft)`, "Bemessungsverfahren mit M<sub>Eds</sub>: Bemessungshilfen (z. B. Zilch/Zehetmaier, Grasser)"],
+  },
+  sbBauteil: {
+    titel: "Bauteil: Balken oder Platte",
+    text: "Balken: Stäbe liegen in Lagen innerhalb der Bügel; geprüft wird der lichte Abstand. Platte: Die Stäbe liegen gleichmäßig über die Breite b (b = 100 cm → je Meter); zusätzlich wird der größte Stababstand geprüft. Plattengeometrie darf die Strukturklasse um 1 verringern.",
+    normen: [`${EC2}, 8.2(2) (lichter Abstand)`, `${EC2}, 9.3.1.1(3) (größter Stababstand Platten)`, `${EC2}/NA, Tab. 4.3DE (Strukturklasse)`],
+  },
+  sbLage: {
+    titel: "Verlegung: Stäbe je Lage",
+    formeln: [
+      "a<sub>min</sub> = max( Ø ; d<sub>g</sub> + 5 mm ; 20 mm )",
+      "a<sub>vorh</sub> = ( b − 2·(c<sub>nom</sub> + d<sub>sw</sub>) − n<sub>l</sub>·Ø ) / ( n<sub>l</sub> − 1 )",
+      "d<sub>1</sub> = c<sub>nom</sub> + d<sub>sw</sub> + Schwerpunktabstand der Lagen",
+    ],
+    text: "0 = so viele Stäbe je Lage, wie der Mindestabstand zulässt (gleichmäßig auf die Lagen verteilt). Der lichte Lagenabstand wird mit a<sub>min</sub> angesetzt. d<sub>1</sub> wird iterativ bestimmt, weil die Lagenzahl von A<sub>s1</sub> und A<sub>s1</sub> von d<sub>1</sub> abhängt.",
+    normen: [`${EC2}, 8.2(2)`],
+  },
+  sbDeckung: {
+    titel: "Betondeckung c<sub>nom</sub>",
+    formeln: [
+      "c<sub>nom</sub> = c<sub>min</sub> + Δc<sub>dev</sub>",
+      "c<sub>min</sub> = max( c<sub>min,b</sub> ; c<sub>min,dur</sub> ; 10 mm )",
+      "c<sub>min,b</sub> = max( d<sub>sw</sub> ; d<sub>s</sub> − d<sub>sw</sub> ) &nbsp;(Bügel außen)",
+    ],
+    text: "c<sub>min,dur</sub> folgt aus der Expositionsklasse über die Strukturklasse (Start S4 bei 50 Jahren, Zu-/Abschläge für Nutzungsdauer, Festigkeit, Plattengeometrie). Vorhaltemaß nach NA: Δc<sub>dev</sub> = 10 mm. " +
+      "Die Tabellenwerte sind vor Verwendung an der Norm zu prüfen; Sonderfälle (Verbund, Brandschutz, Erdberührung) sind nicht erfasst.",
+    normen: [`${EC2}, 4.4.1.1 bis 4.4.1.3`, `${EC2}/NA, Tab. 4.3DE, 4.4DE`, "Mindestfestigkeitsklassen: EC 2/NA, Tab. E.1DE"],
+  },
   epsCu2: {
     titel: "Bruchstauchung ε<sub>cu2</sub>",
     formeln: [
@@ -517,7 +556,7 @@ const INFO = {
       "x = d/λ · [ 1 − √( 1 − 2·M<sub>Ed</sub> / (η·f<sub>cd</sub>·b·d²) ) ]",
       "Plattenbalken mit λ·x > h<sub>f</sub>: Gleichgewicht am T-Querschnitt (Steg und Gurtüberstände), numerisch gelöst",
     ],
-    text: "Momentengleichgewicht um die Zugbewehrung bei reiner Biegung (N<sub>Ed</sub> = 0). Beim Plattenbalken gilt für b die mitwirkende Gurtbreite b<sub>eff</sub>.",
+    text: "Momentengleichgewicht um die Zugbewehrung (bei Normalkraft mit M<sub>Eds</sub> statt M<sub>Ed</sub>). Beim Plattenbalken gilt für b die mitwirkende Gurtbreite b<sub>eff</sub>.",
     normen: [`${EC2}, 6.1(2)P (Annahmen)`, `${EC2}, 3.1.7(3), Bild 3.5 (rechteckiger Spannungsblock)`],
   },
   xi: {
@@ -529,7 +568,8 @@ const INFO = {
   As1erf: {
     titel: "Erforderliche Zugbewehrung A<sub>s1</sub>",
     formeln: [
-      "A<sub>s1</sub> = η·f<sub>cd</sub>·b·λ·x / f<sub>yd</sub> &nbsp;(N<sub>Ed</sub> = 0)",
+      "A<sub>s1</sub> = ( η·f<sub>cd</sub>·b·λ·x + N<sub>Ed</sub> ) / f<sub>yd</sub> &nbsp;(N<sub>Ed</sub> &gt; 0 Zug)",
+      "ω-Verfahren: A<sub>s1</sub> = ( ω<sub>1</sub>·b·d·f<sub>cd</sub> + N<sub>Ed</sub> ) / σ<sub>sd</sub>",
       "mit Druckbewehrung: A<sub>s1</sub> = ( F<sub>cd,lim</sub> + A<sub>s2</sub>·σ<sub>s2</sub> ) / f<sub>yd</sub>",
     ],
     text: "Kräftegleichgewicht am Querschnitt: Betondruckkraft plus Druckbewehrungskraft = Zugkraft der Bewehrung. Beim Plattenbalken wird die Druckkraft von Gurt und Steg getrennt erfasst.",

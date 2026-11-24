@@ -8,7 +8,11 @@
  *    die Druckzone) oder rechteckiger Spannungsblock (EC 2, 3.1.7(3)) mit lambda und eta
  *  - fcd = alpha_cc * fck / gamma_c mit alpha_cc = 0,85 (NA DE), gamma_c = 1,5
  *  - Betonstahl B500B, Stahlspannungs-Dehnungs-Linie bilinear mit horizontalem Ast
- *  - Reine Biegung (NEd = 0), Grundkombination (gamma_s = 1,15)
+ *  - Biegung mit Normalkraft (NEd > 0 Zug, < 0 Druck), Bezug auf die Zugbewehrung:
+ *    MEds = MEd - NEd * zs1; As1 = (Fc + NEd) / fyd (Grundkombination, gamma_s = 1,15)
+ *  - Verfahren: Spannungsblock, Parabel-Rechteck (direkt) oder omega-Verfahren (dimensionslos,
+ *    mu_Eds -> omega_1, As1 = (omega_1 * b * d * fcd + NEd) / sigma_sd)
+ *  - Betondeckung, Expositionsklassen und Stababstände: Klassen Expositionsklassen, Betondeckung, Bewehrungswahl
  *  - Duktilitätsgrenze xi_lim = x/d: 0,45 (<= C50/60), Druckbewehrung darüber hinaus
  *  - Intern: mm, N, N/mm². Eingabe der Maße in cm, Ausgabe der Bewehrung in cm².
  */
@@ -100,20 +104,29 @@ class Biegebemessung {
 
   /**
    * @param {number} MEd Bemessungsmoment [kNm]; positiv = Zug unten, negativ = Zug oben
-   * @param {string} modus 'pr' = Parabel-Rechteck-Diagramm, 'block' = rechteckiger Spannungsblock
+   * @param {string} modus 'pr' = Parabel-Rechteck-Diagramm, 'block' = rechteckiger Spannungsblock,
+   *                       'omega' = omega-Verfahren (Parabel-Rechteck, dimensionslose Darstellung)
+   * @param {number} NEd Normalkraft [kN]; positiv = Zug, negativ = Druck (wirkt im Schwerpunkt des Betonquerschnitts)
    * @returns {Object} Ergebnis (Längen in mm, Flächen in mm²)
    */
-  bemesse(MEd, modus = "pr") {
+  bemesse(MEd, modus = "pr", NEd = 0) {
     const { q, beton: bt, stahl: st } = this;
     const negativ = MEd < 0;
-    const M = Math.abs(MEd) * 1e6;                       // [Nmm]
     const istT = q.typ === "plattenbalken" && !negativ;  // Gurt in der Druckzone?
     const d = q.h - q.d1;                                // statische Nutzhöhe
+    const linie = modus === "block" ? "block" : "pr";    // Betonarbeitslinie (omega-Verfahren: Parabel-Rechteck)
+    const N = NEd * 1e3;                                 // [N], Zug positiv
+    // Schwerpunkt des Betonquerschnitts (Abstand vom Druckrand) und Hebelarm der Zugbewehrung dazu
+    const zcOben = q.typ === "plattenbalken"
+      ? (q.bf * q.hf * q.hf / 2 + q.b * (q.h - q.hf) * (q.hf + (q.h - q.hf) / 2)) / q.Ac : q.h / 2;
+    const zc = negativ ? q.h - zcOben : zcOben;
+    const zs1 = d - zc;
+    const M = Math.abs(MEd) * 1e6 - N * zs1;             // MEds [Nmm] (Bezug Zugbewehrung)
     const a = bt.eta * bt.fcd;                           // Spannungsblock [N/mm²]
     const lam = bt.lambda;
 
     const res = {
-      negativ, istT, d, modus, hinweise: [], fehler: null,
+      negativ, istT, d, modus, linie, NEd, zc, zs1, MEds: M / 1e6, hinweise: [], fehler: null,
       fcd: bt.fcd, fyd: st.fyd, lambda: lam, eta: bt.eta, epsCu2: bt.epsCu2, xiLim: bt.xiLim,
     };
 
@@ -148,7 +161,12 @@ class Biegebemessung {
       }
       return { F, M };
     };
-    const druckModell = modus === "pr" ? druckPR : druck;          // gewählte Arbeitslinie
+    const druckModell = linie === "pr" ? druckPR : druck;          // gewählte Arbeitslinie
+
+    if (M < 0) {
+      res.fehler = "Das Moment um die Zugbewehrung ist negativ (M_Eds = " + (M / 1e6).toFixed(1) + " kNm): überwiegend Zug (große Zugkraft, kleine Ausmitte). Diese Bemessung ist nicht umgesetzt.";
+      return res;
+    }
 
     const xLim = bt.xiLim * d;
     const lim = druckModell(xLim);
@@ -162,7 +180,7 @@ class Biegebemessung {
         if (druckModell(mid).M < M) lo = mid; else hi = mid;
       }
       x = (lo + hi) / 2;
-      As1 = druckModell(x).F / st.fyd;
+      As1 = (druckModell(x).F + N) / st.fyd;
       res.fall = "Einfach bewehrt";
     } else {
       // Druckbewehrung erforderlich: Betonanteil bei x = x_lim, Rest über Druckbewehrung
@@ -173,7 +191,7 @@ class Biegebemessung {
       const eps2 = bt.epsCu2 / 1000 * (xLim - q.d2) / xLim;
       const sig2 = Math.min(eps2 * st.Es, st.fyd);
       As2 = (M - lim.M) / ((d - q.d2) * sig2);
-      As1 = (lim.F + As2 * sig2) / st.fyd;
+      As1 = (lim.F + As2 * sig2 + N) / st.fyd;
       x = xLim;
       res.sigS2 = sig2;
       res.fall = "Doppelt bewehrt (Druckbewehrung erforderlich)";
@@ -182,7 +200,7 @@ class Biegebemessung {
 
     res.x = x; res.xi = x / d;
     res.sBlock = lam * x;                                           // Höhe des Spannungsblocks
-    res.s = modus === "pr" ? x : lam * x;                           // Höhe der Druckzone im gewählten Modell
+    res.s = linie === "pr" ? x : lam * x;                           // Höhe der Druckzone im gewählten Modell
     res.Fc = druckModell(x).F;                                      // Betondruckkraft [N]
 
     // ---- Dehnungsebene: Bereich 2 (Stahl bei eps_ud) oder Bereich 3 (Beton bei eps_cu2) ----
@@ -208,22 +226,40 @@ class Biegebemessung {
       for (let i = 0; i <= 40; i++) { const z = x * i / 40; pr.push({ z, sig: bt.sigmaPR(et * (1 - z / x)) }); }
       res.spannung = {
         sigC: bt.eta * bt.fcd,                                          // Spannungsblock
-        sigCmax: modus === "pr" ? bt.sigmaPR(et) : bt.eta * bt.fcd,     // größte Betonspannung (Druckrand) im gewählten Modell
+        sigCmax: linie === "pr" ? bt.sigmaPR(et) : bt.eta * bt.fcd,     // größte Betonspannung (Druckrand) im gewählten Modell
         pr, epsTop: et,
         sigS1: Math.min(eps(d) / 1000 * st.Es, st.fyd),                 // Zugbewehrung
         sigS2: As2 > 0 ? res.sigS2 : 0,                                 // Druckbewehrung
       };
-      if (bereich2) res.hinweise.push(modus === "pr"
+      if (bereich2) res.hinweise.push(linie === "pr"
         ? "Bereich 2: Stahldehnung auf 25 ‰ begrenzt, die Betonstauchung am Druckrand bleibt unter ε_cu2."
         : "Bereich 2: Stahldehnung auf 25 ‰ begrenzt, der Beton ist nicht voll ausgenutzt (Spannungsblock bleibt als Näherung).");
     }
     res.druckzone = !istT ? "Rechteck-Druckzone"
       : (res.s <= q.hf ? "Druckzone im Gurt (wie Rechteck mit b_eff)" : "Druckzone reicht in den Steg");
 
+    // ---- omega-Verfahren: dimensionslose Größen (Rechnung mit b = b_eff im Gurt, sonst Stegbreite) ----
+    if (modus === "omega") {
+      const bRef = istT ? q.bf : q.b, nenner = bRef * d * bt.fcd;
+      const o = {
+        bRef, mu: M / (nenner * d), muLim: lim.M / (nenner * d),
+        omega1: (As1 * st.fyd - N) / nenner,                       // As1 = (omega1·b·d·fcd + NEd) / sigma_sd
+        sigmaSd: st.fyd, xi: x / d,
+      };
+      o.zeta = As2 > 0 ? null : M / (druckModell(x).F * d);          // z/d (nur einfach bewehrt)
+      if (As2 > 0) { o.omega1lim = lim.F / nenner; o.omega2 = As2 * res.sigS2 / nenner; o.domega = (M - lim.M) / (nenner * d * (1 - q.d2 / d)); }
+      res.omega = o;
+      if (istT && res.s > q.hf) res.hinweise.push("ω-Verfahren: Druckzone reicht in den Steg – ω bezieht sich auf b_eff, die Rechnung erfolgt über die Integration des Parabel-Rechteck-Diagramms (Tafelwerte gelten für Rechteck).");
+    }
+    if (N !== 0) {
+      res.hinweise.push(`Normalkraft N_Ed = ${NEd.toFixed(1)} kN (${NEd < 0 ? "Druck" : "Zug"}) im Betonschwerpunkt: M_Eds = M_Ed − N_Ed·z_s1 = ${(M / 1e6).toFixed(1)} kNm mit z_s1 = ${(zs1 / 10).toFixed(1)} cm.`);
+      if (As1 < 0) res.hinweise.push("Zugbewehrung rechnerisch nicht erforderlich (Druckkraft überwiegt) – Mindestbewehrung bzw. Bewehrung von Druckgliedern (EC 2, 9.5) beachten; Knicken/Theorie II. Ordnung ist nicht berücksichtigt.");
+    }
+
     // Mindest- und Höchstbewehrung (EC 2, 9.2.1.1), b_t = Stegbreite bzw. Breite
     res.AsMin = Math.max(0.26 * bt.fctm / st.fyk * q.b * d, 0.0013 * q.b * d);
     res.AsMax = 0.04 * q.Ac;
-    res.As1erf = As1;
+    res.As1erf = Math.max(As1, 0);
     res.As1 = Math.max(As1, res.AsMin);
     res.As2 = As2;
     res.AsMaxOk = (res.As1 + As2) <= res.AsMax;
@@ -242,5 +278,150 @@ class Biegebemessung {
       const n = Math.max(1, Math.ceil(As / A1 - 1e-9));
       return { dm, n, As: n * A1 };
     });
+  }
+}
+
+/* ======================= Expositionsklassen, Betondeckung, Bewehrungswahl ======================= */
+
+/**
+ * Expositionsklassen nach DIN EN 206-1/DIN 1045-2 mit den Anforderungen aus DIN EN 1992-1-1/NA
+ * (Tab. E.1DE: Mindestfestigkeitsklasse, Tab. 4.3DE/4.4DE: Strukturklasse und c_min,dur).
+ * Alle Tabellenwerte sind vor der Anwendung an der Norm zu prüfen.
+ * spalte = Spalte der Tabelle 4.4DE (0 X0, 1 XC1, 2 XC2/XC3, 3 XC4, 4 XD1/XS1, 5 XD2/XS2, 6 XD3/XS3, null = ohne Einfluss)
+ * fckRed = Betonfestigkeit [N/mm²], ab der die Strukturklasse um 1 verringert werden darf (Tab. 4.3DE)
+ */
+class Expositionsklassen {
+  static GRUPPEN = {
+    XC: { titel: "Karbonatisierung (XC)", klassen: [
+      { id: "XC1", text: "trocken oder ständig nass", fck: 16, spalte: 1, fckRed: 30 },
+      { id: "XC2", text: "nass, selten trocken", fck: 16, spalte: 2, fckRed: 35 },
+      { id: "XC3", text: "mäßige Feuchte", fck: 20, spalte: 2, fckRed: 35 },
+      { id: "XC4", text: "wechselnd nass und trocken", fck: 25, spalte: 3, fckRed: 40 }] },
+    XD: { titel: "Chloride, nicht Meerwasser (XD)", klassen: [
+      { id: "XD1", text: "mäßige Feuchte", fck: 30, spalte: 4, fckRed: 40 },
+      { id: "XD2", text: "nass, selten trocken", fck: 35, spalte: 5, fckRed: 40 },
+      { id: "XD3", text: "wechselnd nass und trocken", fck: 35, spalte: 6, fckRed: 45 }] },
+    XS: { titel: "Meerwasser (XS)", klassen: [
+      { id: "XS1", text: "salzhaltige Luft", fck: 30, spalte: 4, fckRed: 40 },
+      { id: "XS2", text: "unter Wasser", fck: 35, spalte: 5, fckRed: 40 },
+      { id: "XS3", text: "Tidebereich, Spritzwasser", fck: 35, spalte: 6, fckRed: 45 }] },
+    XF: { titel: "Frost (XF), mit Luftporen angesetzt", klassen: [
+      { id: "XF1", text: "mäßige Wassersättigung, ohne Taumittel", fck: 25, spalte: null },
+      { id: "XF2", text: "mäßige Wassersättigung, mit Taumittel", fck: 25, spalte: null },
+      { id: "XF3", text: "hohe Wassersättigung, ohne Taumittel", fck: 25, spalte: null },
+      { id: "XF4", text: "hohe Wassersättigung, mit Taumittel", fck: 30, spalte: null }] },
+    XA: { titel: "chemischer Angriff (XA)", klassen: [
+      { id: "XA1", text: "schwach angreifend", fck: 25, spalte: null },
+      { id: "XA2", text: "mäßig angreifend", fck: 35, spalte: null },
+      { id: "XA3", text: "stark angreifend", fck: 35, spalte: null }] },
+    XM: { titel: "Verschleiß (XM)", klassen: [
+      { id: "XM1", text: "mäßiger Verschleiß", fck: 30, spalte: null, zuschlag: 5 },
+      { id: "XM2", text: "starker Verschleiß", fck: 35, spalte: null, zuschlag: 10 },
+      { id: "XM3", text: "sehr starker Verschleiß", fck: 35, spalte: null, zuschlag: 15 }] },
+  };
+  /** Tab. 4.4DE (Betonstahl): c_min,dur [mm] je Strukturklasse S1..S6 und Spalte (X0, XC1, XC2/3, XC4, XD1/XS1, XD2/XS2, XD3/XS3) */
+  static CMIN_DUR = [
+    [10, 10, 10, 15, 20, 25, 30], [10, 10, 15, 20, 25, 30, 35], [10, 10, 20, 25, 30, 35, 40],
+    [10, 15, 25, 30, 35, 40, 45], [15, 20, 30, 35, 40, 45, 50], [20, 25, 35, 40, 45, 50, 55],
+  ];
+
+  /** Klasse zur Betonfestigkeit fck [N/mm²] (nächsthöhere Klasse der Liste). */
+  static klasseZuFck(fck) {
+    const k = BETONKLASSEN.find(b => b[1] >= fck);
+    return k ? k[0] : BETONKLASSEN[BETONKLASSEN.length - 1][0];
+  }
+
+  /**
+   * @param {string[]} auswahl gewählte Expositionsklassen, z. B. ["XC4","XF1"] (leer = X0)
+   * @param {{nutzung100:boolean, platte:boolean, fck:number}} opt 100 Jahre Nutzungsdauer, Plattengeometrie, gewählte Betonfestigkeit
+   * @returns {{fckMin:number, klasseMin:string, cminDur:number, strukturklasse:number, schritte:string[], massgebend:string}}
+   */
+  static bewerte(auswahl, { nutzung100 = false, platte = false, fck = 0 } = {}) {
+    const alle = Object.values(Expositionsklassen.GRUPPEN).flatMap(g => g.klassen);
+    const gew = auswahl.map(id => alle.find(k => k.id === id)).filter(Boolean);
+    const schritte = [];
+    const fckMin = Math.max(12, ...gew.map(k => k.fck));
+    const massgebend = gew.length ? gew.reduce((a, k) => k.fck > a.fck ? k : a).id : "X0";
+
+    // Strukturklasse: Ausgangswert S4 (50 Jahre); Zuschläge/Abminderungen nach Tab. 4.3DE
+    let S = 4;
+    if (nutzung100) { S += 2; schritte.push("Nutzungsdauer 100 Jahre: +2"); }
+    // Abminderung Betonfestigkeit nur, wenn alle Klassen mit Einfluss die Festigkeit erfüllen
+    const mitSpalte = gew.filter(k => k.spalte !== null);
+    if (mitSpalte.length && mitSpalte.every(k => fck >= k.fckRed)) { S -= 1; schritte.push("Festigkeitsklasse über der Abminderungsgrenze: −1"); }
+    if (platte) { S -= 1; schritte.push("Plattengeometrie (Bewehrungslage unverändert durch Bauablauf): −1"); }
+    S = Math.min(6, Math.max(1, S));
+
+    // c_min,dur: größter Wert der Klassen mit Einfluss; XM erhöht um den Zuschlag
+    let cminDur = Expositionsklassen.CMIN_DUR[S - 1][0];
+    for (const k of mitSpalte) cminDur = Math.max(cminDur, Expositionsklassen.CMIN_DUR[S - 1][k.spalte]);
+    const zuschlag = Math.max(0, ...gew.map(k => k.zuschlag || 0));
+    if (zuschlag) { cminDur += zuschlag; schritte.push(`Verschleiß: c_min,dur + ${zuschlag} mm`); }
+
+    return { fckMin, klasseMin: Expositionsklassen.klasseZuFck(fckMin), cminDur, strukturklasse: S, schritte, massgebend };
+  }
+}
+
+/** Betondeckung nach EC 2, 4.4.1: c_nom = c_min + Δc_dev, c_min = max(c_min,b; c_min,dur; 10 mm). */
+class Betondeckung {
+  /**
+   * @param {number} cminDur [mm] aus der Expositionsklasse
+   * @param {number} ds Längsstabdurchmesser (größter) [mm]
+   * @param {number} dsw Bügeldurchmesser [mm] (0 = ohne Bügel)
+   * @param {number} dev Vorhaltemaß Δc_dev [mm] (NA DE: 10 mm)
+   */
+  static berechne(cminDur, ds, dsw, dev) {
+    // Verbund: Bügel liegt außen -> c_min,b = d_sw; zusätzlich muss der Längsstab mindestens d_s Deckung haben
+    const cminB = dsw > 0 ? Math.max(dsw, ds - dsw) : ds;
+    const cmin = Math.max(cminB, cminDur, 10);
+    return { cminB, cminDur, cmin, dev, cnom: cmin + dev };
+  }
+}
+
+/** Wahl der Bewehrung: Stabanzahl, Lagen, lichte Abstände und Vergleich mit den Normwerten (EC 2, 8.2 / 9.3.1.1). */
+class Bewehrungswahl {
+  /**
+   * @param {{b:number, h:number, cnom:number, dsw:number, dg:number, platte:boolean}} p alles in mm
+   */
+  constructor(p) { Object.assign(this, p); }
+
+  /** Mindestabstand nach EC 2, 8.2(2): max(d_s; d_g + 5 mm; 20 mm) */
+  aMin(ds) { return Math.max(ds, this.dg + 5, 20); }
+
+  /** Bewehrung im Balken: Stäbe in Lagen. nProLage = 0 → maximal mögliche Anzahl je Lage. */
+  balken(As, ds, nProLage = 0) {
+    const A1 = Math.PI * ds * ds / 4, n = Math.max(2, Math.ceil(As / A1 - 1e-9));
+    const bNetto = this.b - 2 * (this.cnom + this.dsw);        // Breite zwischen den Bügeln
+    const amin = this.aMin(ds);
+    const nMax = Math.max(1, Math.floor((bNetto + amin) / (ds + amin)));
+    let nl = nProLage > 0 ? Math.min(Math.floor(nProLage), n) : nMax;
+    let lagen = Math.ceil(n / nl);
+    if (nProLage <= 0) nl = Math.ceil(n / lagen);               // gleichmäßig auf die Lagen verteilen
+    // Stabanzahl je Lage und Schwerpunktabstand der Lagen vom Rand (Lage 1 außen, lichter Lagenabstand = a_min)
+    const proLage = []; let rest = n;
+    for (let i = 0; i < lagen; i++) { const k = Math.min(nl, rest); proLage.push(k); rest -= k; }
+    let summe = 0;
+    proLage.forEach((k, i) => { summe += k * (ds / 2 + i * (ds + amin)); });
+    const d1 = this.cnom + this.dsw + summe / n;                // Rand -> Schwerpunkt der Zugbewehrung
+    const avh = nl > 1 ? (bNetto - nl * ds) / (nl - 1) : null;  // lichter horizontaler Abstand
+    return {
+      art: "balken", ds, n, nl, lagen, proLage, As: n * A1, amin, nMax, bNetto, d1,
+      avh, ok: nl > 1 ? avh >= amin - 1e-9 : bNetto >= ds, grenzText: `a_min = max(Ø; d_g+5; 20) = ${amin} mm`,
+    };
+  }
+
+  /** Bewehrung in der Platte: Stäbe gleichmäßig über die Breite b (je Meter, wenn b = 1000 mm). */
+  flaechig(As, ds) {
+    const A1 = Math.PI * ds * ds / 4, amin = this.aMin(ds);
+    const smax = Math.min(2 * this.h, 250);                      // Hauptbewehrung im Bereich des Größtmoments
+    // Stabanzahl: aus A_s und zusätzlich so viele, dass s_max eingehalten wird
+    const n = Math.max(1, Math.ceil(As / A1 - 1e-9), Math.ceil(this.b / smax - 1e-9));
+    const s = this.b / n;
+    return {
+      art: "platte", ds, n, nl: n, lagen: 1, As: n * A1, amin, s, smax, avh: s - ds,
+      d1: this.cnom + ds / 2, ok: s - ds >= amin - 1e-9 && s <= smax + 1e-9,
+      okMin: s - ds >= amin - 1e-9, okMax: s <= smax + 1e-9,
+      grenzText: `a_min = ${amin} mm (lichter Abstand), s_max = min(2h; 250 mm) = ${fmt(smax, 0)} mm`,
+    };
   }
 }
