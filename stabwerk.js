@@ -201,6 +201,12 @@ class Stabwerk {
    */
   constructor(m) { this.m = m; }
 
+  /** Gehaltene Freiheitsgrade eines Knotens (0 = X, 1 = Z, 2 = Drehung): Flags hx, hz, hphi oder Altformat 'lager'. */
+  static gehalten(k) {
+    if ("hx" in k || "hz" in k || "hphi" in k) return [[k.hx, 0], [k.hz, 1], [k.hphi, 2]].filter(p => p[0]).map(p => p[1]);
+    return ({ fest: [0, 1], rolleZ: [1], rolleX: [0], einsp: [0, 1, 2] })[k.lager] || [];
+  }
+
   /** Eingaben prüfen; gibt Fehlertext oder null zurück. */
   pruefe() {
     const m = this.m, nK = m.knoten.length, ok = Number.isFinite;
@@ -254,8 +260,8 @@ class Stabwerk {
     }
     // Lagerbedingungen
     const fest = Array(n).fill(false);
-    const bind = { fest: [0, 1], rolleZ: [1], rolleX: [0], einsp: [0, 1, 2] };
-    m.knoten.forEach((k, i) => (bind[k.lager] || []).forEach(d => { fest[3 * i + d] = true; }));
+    const bind = k => Stabwerk.gehalten(k);
+    m.knoten.forEach((k, i) => bind(k).forEach(d => { fest[3 * i + d] = true; }));
     // Drehfreiheitsgrade ohne jede Steifigkeit (Knoten nur mit Gelenkstäben): kleine Hilfsfeder, damit die Matrix lösbar bleibt
     let kmax = 0; for (let i = 0; i < n; i++) kmax = Math.max(kmax, K[i][i]);
     for (let i = 2; i < n; i += 3) if (K[i][i] < 1e-12 * kmax) K[i][i] += 1e-6 * kmax * 1e-3;
@@ -279,7 +285,7 @@ class Stabwerk {
     }
     const reaktionen = [];
     m.knoten.forEach((k, i) => {
-      if (!(bind[k.lager] || []).length) return;
+      if (!bind(k).length) return;
       const r = { k: i + 1, Rx: 0, Rz: 0, M: 0 };
       const hat = d => fest[3 * i + d];
       if (hat(0)) r.Rx = Rg[3 * i] - Fext[3 * i];

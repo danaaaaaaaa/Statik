@@ -6,8 +6,6 @@
  * StatikSeite (Eingaben sammeln, rechnen, Ergebnisse anzeigen). Die Rechnung steht in stabwerk.js.
  */
 
-/** Lagerarten: Schlüssel -> Anzeigename */
-const LAGER = { frei: "frei", fest: "gelenkig fest", rolleZ: "Rolle (Z gehalten)", rolleX: "Rolle (X gehalten)", einsp: "Einspannung" };
 const RICHTUNGEN = { lokal: "lokal z'", Z: "global Z (je Länge)", Zproj: "global Z (Projektion)", X: "global X" };
 
 /** Editierbare Tabelle für eine Liste gleichartiger Einträge. */
@@ -34,6 +32,12 @@ class ZeilenEditor {
       for (const sp of this.spalten) {
         const c = tr.insertCell();
         let e;
+        if (sp.haken) {
+          e = document.createElement("input"); e.type = "checkbox"; e.checked = !!z[sp.k];
+          e.addEventListener("input", () => { z[sp.k] = e.checked; this.bei(); });
+          c.appendChild(e); c.className = "sw-haken";
+          continue;
+        }
         if (sp.opt) {
           e = document.createElement("select");
           for (const [w, text] of Object.entries(sp.opt)) e.add(new Option(text, w));
@@ -72,11 +76,16 @@ class StabwerkZeichnung {
     const { g, w, h } = canvasVorbereiten(this.cv);
     const kn = m.knoten.filter(k => Number.isFinite(k.x) && Number.isFinite(k.z));
     if (!w || !h || kn.length === 0) return "";
-    const xs = kn.map(k => k.x), zs = kn.map(k => k.z);
+    const nx0 = Math.min(...kn.map(k => k.x)), nx1 = Math.max(...kn.map(k => k.x));
+    const nz0 = Math.min(...kn.map(k => k.z)), nz1 = Math.max(...kn.map(k => k.z));
+    const ausd = Math.max(nx1 - nx0, nz1 - nz0, 1);
+    // Weltkoordinaten der Diagramm- bzw. Verformungslinie vorab bestimmen, damit sie in den Ausschnitt passen
+    const extra = this._extra(erg, art, ausd, ueh);
+    const xs = [nx0, nx1, ...extra.map(p => p[0])], zs = [nz0, nz1, ...extra.map(p => p[1])];
     const x0 = Math.min(...xs), z0 = Math.min(...zs);
-    const ausd = Math.max(Math.max(...xs) - x0, Math.max(...zs) - z0, 1);
-    const rand = 56;
-    const sk = Math.min((w - 2 * rand) / Math.max(Math.max(...xs) - x0, 0.5), (h - 2 * rand) / Math.max(Math.max(...zs) - z0, 0.5), 400);
+    const rand = 62;                                           // Platz für Lasten, Lager und Beschriftung
+    const bw = Math.max(Math.max(...xs) - x0, 0.5), bh = Math.max(Math.max(...zs) - z0, 0.5);
+    const sk = Math.min((w - 2 * rand) / bw, (h - 2 * rand) / bh, 400);
     const ox = (w - (Math.max(...xs) - x0) * sk) / 2, oy = (h - (Math.max(...zs) - z0) * sk) / 2;
     const P = (x, z) => [ox + (x - x0) * sk, oy + (z - z0) * sk];
     const stab = m.staebe.map(s => {
@@ -114,21 +123,64 @@ class StabwerkZeichnung {
       g.fillStyle = "#222"; g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill();
       g.fillStyle = "#c0392b"; g.textAlign = "left"; g.fillText(n + 1, x + 6, y - 6);
     });
+    this._achsen(g, w, h);
     return text;
   }
 
+  /** Weltpunkte [x, z] der Schnittgrößenlinie bzw. der verformten Lage (für den Bildausschnitt); legt Maßstäbe fest. */
+  _extra(erg, art, ausd, ueh) {
+    this.kd = 0; this.fv = 0;
+    if (!erg || art === "system") return [];
+    const pts = [];
+    if (art === "verf") {
+      let mx = 0;
+      erg.staebe.forEach(s => s.verf.forEach(p => { mx = Math.max(mx, Math.hypot(p.dU, p.dW)); }));
+      if (mx < 1e-12) return [];
+      this.fv = ueh > 0 ? ueh : 0.08 * ausd / mx;
+      for (const s of erg.staebe) { const e = s.el, a = this._knoten[e.i]; s.verf.forEach(p => pts.push([a.x + e.c * p.x + p.dU * this.fv, a.z + e.s * p.x + p.dW * this.fv])); }
+      return pts;
+    }
+    let mx = 0;
+    erg.staebe.forEach(s => s.verlauf.forEach(p => { mx = Math.max(mx, Math.abs(p[art])); }));
+    if (mx < 1e-9) return [];
+    this.kd = 0.15 * ausd / mx;                                 // Länge in m je Einheit der Schnittgröße
+    for (const s of erg.staebe) {
+      const e = s.el, a = this._knoten[e.i];
+      s.verlauf.forEach(p => pts.push([a.x + e.c * p.x - e.s * p[art] * this.kd, a.z + e.s * p.x + e.c * p[art] * this.kd]));
+    }
+    return pts;
+  }
+
+  /** Kleines Koordinatensystem (X nach rechts, Z nach unten) unten rechts */
+  _achsen(g, w, h) {
+    const x = w - 44, y = h - 44, l = 26;
+    this._pfeil(g, x, y, x + l, y, "#555"); this._pfeil(g, x, y, x, y + l, "#555");
+    g.fillStyle = "#555"; g.font = "11px system-ui, sans-serif"; g.textAlign = "left";
+    g.fillText("X", x + l + 3, y + 4); g.textAlign = "center"; g.fillText("Z", x, y + l + 12);
+  }
+
+  /** Lagersymbol nach gehaltenen Richtungen: X+Z gelenkig, nur Z / nur X Rolle, mit φ Einspannung; darunter die Kurzbezeichnung. */
   _lager(g, m, P) {
     g.strokeStyle = "#444"; g.fillStyle = "#e8eaee"; g.lineWidth = 1.5;
     for (const k of m.knoten) {
-      if (!Number.isFinite(k.x) || !Number.isFinite(k.z) || k.lager === "frei") continue;
+      if (!Number.isFinite(k.x) || !Number.isFinite(k.z)) continue;
+      const hx = !!k.hx, hz = !!k.hz, hp = !!k.hphi;
+      if (!hx && !hz && !hp) continue;
       const [x, y] = P(k.x, k.z);
+      g.save(); g.translate(x, y);
+      if (hx && !hz && !hp) g.rotate(Math.PI / 2);             // nur X gehalten: Symbol seitlich (Lager links vom Knoten)
       g.beginPath();
-      if (k.lager === "einsp") { g.rect(x - 9, y, 18, 8); g.moveTo(x - 9, y); g.lineTo(x + 9, y); }
-      else { g.moveTo(x, y); g.lineTo(x - 9, y + 14); g.lineTo(x + 9, y + 14); g.closePath(); }
+      let unten = 16;
+      if (hp) { g.rect(-10, 0, 20, 8); unten = 10; }          // Einspannung (ggf. mit Gleitlager)
+      else { g.moveTo(0, 0); g.lineTo(-9, 14); g.lineTo(9, 14); g.closePath(); }
       g.fill(); g.stroke();
-      if (k.lager === "rolleZ" || k.lager === "rolleX") {
-        g.beginPath(); g.arc(x - 4, y + 18, 3, 0, 7); g.arc(x + 4, y + 18, 3, 0, 7); g.stroke();
+      if (!hp && hx !== hz || hp && !(hx && hz)) {            // verschieblich: Rollen
+        g.beginPath(); g.arc(-4, unten + 3, 3, 0, 7); g.arc(4, unten + 3, 3, 0, 7); g.stroke();
       }
+      g.restore();
+      g.fillStyle = "#555"; g.font = "10px system-ui, sans-serif"; g.textAlign = "center";
+      g.fillText([hx && "x", hz && "z", hp && "φ"].filter(Boolean).join(" "), x + (hx && !hz && !hp ? -26 : 0), y + (hx && !hz && !hp ? 4 : 32));
+      g.fillStyle = "#e8eaee"; g.font = "12px system-ui, sans-serif";
     }
   }
 
@@ -181,14 +233,14 @@ class StabwerkZeichnung {
     let mx = 0;
     erg.staebe.forEach(s => s.verlauf.forEach(p => { mx = Math.max(mx, Math.abs(p[art])); }));
     if (mx < 1e-9) return `Alle ${art}-Werte sind null.`;
-    const sc = 70 / mx, einheit = art === "M" ? "kNm" : "kN";
+    const einheit = art === "M" ? "kNm" : "kN";
     const farbe = { N: "#2e7d32", V: "#1565c0", M: "#c0392b" }[art];
     for (const s of erg.staebe) {
       const e = s.el, nx = -e.s, nz = e.c;                       // Normale z'
-      const k0 = this._knoten[e.i], base = x => ({ X: k0.x + e.c * x, Z: k0.z + e.s * x });
+      const k0 = this._knoten[e.i];
       const pos = s.verlauf.map(p => {
-        const b = base(p.x), [bx, by] = P(b.X, b.Z);
-        return { bx, by, tx: bx + nx * p[art] * sc, ty: by + nz * p[art] * sc, w: p[art] };
+        const [bx, by] = P(k0.x + e.c * p.x, k0.z + e.s * p.x), [tx, ty] = P(k0.x + e.c * p.x + nx * p[art] * this.kd, k0.z + e.s * p.x + nz * p[art] * this.kd);
+        return { bx, by, tx, ty, w: p[art] };
       });
       g.fillStyle = farbe + "33"; g.strokeStyle = farbe; g.lineWidth = 1.5;
       g.beginPath(); pos.forEach((p, i) => i ? g.lineTo(p.bx, p.by) : g.moveTo(p.bx, p.by));
@@ -211,10 +263,8 @@ class StabwerkZeichnung {
   }
 
   _verformung(g, erg, stab, P, sk, ausd, ueh) {
-    let mx = 0;
-    erg.staebe.forEach(s => s.verf.forEach(p => { mx = Math.max(mx, Math.hypot(p.dU, p.dW)); }));
-    if (mx < 1e-12) return "Keine Verformung.";
-    const f = ueh > 0 ? ueh : 0.08 * ausd / mx;
+    const f = this.fv;
+    if (!f) return "Keine Verformung.";
     g.strokeStyle = "#8e24aa"; g.lineWidth = 2.5;
     for (const s of erg.staebe) {
       const e = s.el, a = this._knoten[e.i];
@@ -239,8 +289,9 @@ class StatikSeite {
     const bei = () => this.aktualisiere();
     const nr = (z, k) => z.length ? z[z.length - 1][k] : 1;
     this.edKnoten = new ZeilenEditor(document.getElementById("sw-knoten"),
-      [{ k: "x", l: "X [m]" }, { k: "z", l: "Z [m]" }, { k: "lager", l: "Lager", opt: LAGER }],
-      z => ({ x: z.length ? z[z.length - 1].x + 3 : 0, z: z.length ? z[z.length - 1].z : 0, lager: "frei" }), bei, "Knoten");
+      [{ k: "x", l: "X [m]" }, { k: "z", l: "Z [m]" }, { k: "hx", l: "hält X", haken: true },
+       { k: "hz", l: "hält Z", haken: true }, { k: "hphi", l: "hält φ", haken: true }],
+      z => ({ x: z.length ? z[z.length - 1].x + 3 : 0, z: z.length ? z[z.length - 1].z : 0, hx: false, hz: false, hphi: false }), bei, "Knoten");
     this.edStaebe = new ZeilenEditor(document.getElementById("sw-staebe"),
       [{ k: "i", l: "von" }, { k: "j", l: "nach" }, { k: "A", l: "A [cm²]" }, { k: "I", l: "I [cm⁴]" },
        { k: "gel", l: "Gelenk", opt: { "-": "–", anfang: "Anfang", ende: "Ende", beide: "beide" } }],
@@ -269,7 +320,8 @@ class StatikSeite {
   static BEISPIEL() {
     return {
       E: 210000,
-      knoten: [{ x: 0, z: 3, lager: "fest" }, { x: 0, z: 0, lager: "frei" }, { x: 6, z: 0, lager: "frei" }, { x: 6, z: 3, lager: "rolleZ" }],
+      knoten: [{ x: 0, z: 3, hx: true, hz: true, hphi: false }, { x: 0, z: 0, hx: false, hz: false, hphi: false },
+               { x: 6, z: 0, hx: false, hz: false, hphi: false }, { x: 6, z: 3, hx: false, hz: true, hphi: false }],
       staebe: [{ i: 1, j: 2, A: 53.8, I: 8356, gel: "-" }, { i: 2, j: 3, A: 53.8, I: 8356, gel: "-" }, { i: 3, j: 4, A: 53.8, I: 8356, gel: "-" }],
       knotenlasten: [{ k: 2, Fx: 10, Fz: 0, M: 0 }],
       strecken: [{ s: 2, q: 20, richtung: "Z" }], einzel: [],
@@ -277,6 +329,12 @@ class StatikSeite {
   }
 
   lade(m) {
+    // Altformat (Lagerart als Text) in gehaltene Richtungen umwandeln
+    m.knoten.forEach(k => {
+      if ("lager" in k) {
+        const d = Stabwerk.gehalten(k); k.hx = d.includes(0); k.hz = d.includes(1); k.hphi = d.includes(2); delete k.lager;
+      }
+    });
     document.getElementById("sw-E").value = m.E;
     this.edKnoten.setze(m.knoten); this.edStaebe.setze(m.staebe); this.edKL.setze(m.knotenlasten);
     this.edStr.setze(m.strecken); this.edEin.setze(m.einzel);

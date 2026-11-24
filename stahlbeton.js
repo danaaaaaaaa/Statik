@@ -343,8 +343,8 @@ class Expositionsklassen {
     const fckMin = Math.max(12, ...gew.map(k => k.fck));
     const massgebend = gew.length ? gew.reduce((a, k) => k.fck > a.fck ? k : a).id : "X0";
 
-    // Strukturklasse: Ausgangswert S4 (50 Jahre); Zuschläge/Abminderungen nach Tab. 4.3DE
-    let S = 4;
+    // Strukturklasse: Ausgangswert S3 (Deutschland, 50 Jahre; EC 2 empfiehlt S4); Zuschläge/Abminderungen nach Tab. 4.3DE
+    let S = 3;
     if (nutzung100) { S += 2; schritte.push("Nutzungsdauer 100 Jahre: +2"); }
     // Abminderung Betonfestigkeit nur, wenn alle Klassen mit Einfluss die Festigkeit erfüllen
     const mitSpalte = gew.filter(k => k.spalte !== null);
@@ -352,9 +352,12 @@ class Expositionsklassen {
     if (platte) { S -= 1; schritte.push("Plattengeometrie (Bewehrungslage unverändert durch Bauablauf): −1"); }
     S = Math.min(6, Math.max(1, S));
 
-    // c_min,dur: größter Wert der Klassen mit Einfluss; XM erhöht um den Zuschlag
+    // c_min,dur: größter Wert der Klassen mit Einfluss; NA DE: Sicherheitszuschlag Δc_dur,γ bei XD1/XS1 (+10 mm) und XD2/XS2 (+5 mm)
     let cminDur = Expositionsklassen.CMIN_DUR[S - 1][0];
-    for (const k of mitSpalte) cminDur = Math.max(cminDur, Expositionsklassen.CMIN_DUR[S - 1][k.spalte]);
+    for (const k of mitSpalte) {
+      const zg = k.spalte === 4 ? 10 : k.spalte === 5 ? 5 : 0;
+      cminDur = Math.max(cminDur, Expositionsklassen.CMIN_DUR[S - 1][k.spalte] + zg);
+    }
     const zuschlag = Math.max(0, ...gew.map(k => k.zuschlag || 0));
     if (zuschlag) { cminDur += zuschlag; schritte.push(`Verschleiß: c_min,dur + ${zuschlag} mm`); }
 
@@ -423,5 +426,84 @@ class Bewehrungswahl {
       okMin: s - ds >= amin - 1e-9, okMax: s <= smax + 1e-9,
       grenzText: `a_min = ${amin} mm (lichter Abstand), s_max = min(2h; 250 mm) = ${fmt(smax, 0)} mm`,
     };
+  }
+}
+
+/* ======================= Querkraftbemessung ======================= */
+
+/**
+ * Querkraftbemessung nach DIN EN 1992-1-1 mit NA (DE), senkrechte Bügel (α = 90°), Beton ≤ C50/60.
+ *  - ohne Querkraftbewehrung: V_Rd,c nach NA, Gl. (6.2a) mit V_Rd,c,min
+ *  - mit Querkraftbewehrung: Fachwerkmodell, V_Rd,max und erforderliche a_sw mit wählbarem cot θ (1,0 ≤ cot θ ≤ cot θ_max ≤ 3,0)
+ * Intern: N, mm, N/mm².
+ */
+class Querkraftbemessung {
+  constructor(querschnitt, beton, stahl) { this.q = querschnitt; this.bt = beton; this.st = stahl; }
+
+  /**
+   * @param {{VEd:number, NEd:number, d:number, Asl:number, cotVorgabe:number, m:number, dsw:number, sVorgabe:number}} p
+   *   VEd, NEd in kN (NEd: Zug +, Druck −); d, Asl [mm, mm²] (Zugbewehrung, verankert); cotVorgabe 0 = automatisch;
+   *   m = Schnittigkeit der Bügel; dsw = Bügeldurchmesser [mm]; sVorgabe = Bügelabstand [mm], 0 = automatisch
+   */
+  bemesse(p) {
+    const { q, bt, st } = this;
+    const bw = q.b, d = p.d, h = q.h, fck = bt.fck, fcd = bt.fcd, fywd = st.fyd;
+    const V = Math.abs(p.VEd) * 1e3;
+    const res = { V, hinweise: [], bw, d };
+
+    // ---- Betontraganteil V_Rd,c (NA DE, 6.2.2) ----
+    const sigCp = Math.min(-p.NEd * 1e3 / q.Ac, 0.2 * fcd);          // Druck positiv
+    const k = Math.min(2, 1 + Math.sqrt(200 / d));
+    const rho = Math.min(0.02, p.Asl / (bw * d));
+    const CRdc = 0.15 / GAMMA_C;
+    const c = d <= 600 ? 0.0525 : d >= 800 ? 0.0375 : 0.0525 + (0.0375 - 0.0525) * (d - 600) / 200;
+    const vmin = c / GAMMA_C * Math.pow(k, 1.5) * Math.sqrt(fck);
+    const vRdc = CRdc * k * Math.pow(100 * rho * fck, 1 / 3) + 0.12 * sigCp;
+    const vRdcMin = vmin + 0.12 * sigCp;
+    Object.assign(res, { sigCp, k, rho, CRdc, vmin, VRdc: Math.max(vRdc, vRdcMin) * bw * d, VRdcMinMassgebend: vRdcMin > vRdc });
+    res.noetigBew = V > res.VRdc;
+    res.ausnutzungC = V / res.VRdc;
+
+    // ---- Fachwerkmodell ----
+    const z = 0.9 * d;
+    const nu1 = 0.75 * Math.min(1, 1.1 - fck / 500);
+    const faktor = bw * z * nu1 * fcd;                                // V_Rd,max = faktor / (cot + tan)
+    const VRdmax = cot => faktor / (cot + 1 / cot);
+    const VRdcc = 0.5 * 0.48 * Math.pow(fck, 1 / 3) * (1 - 1.2 * sigCp / fcd) * bw * z;
+    const cotMax = V > VRdcc ? Math.min(3, (1.2 + 1.4 * sigCp / fcd) / (1 - VRdcc / V)) : 3;
+    const cotMin = 1;
+    // größtes zulässiges cot θ, bei dem V_Rd,max noch ausreicht: cot + 1/cot <= faktor / V
+    const cr = faktor / V;
+    const cotTrag = cr >= 2 ? (cr + Math.sqrt(cr * cr - 4)) / 2 : 1;
+    let cot = p.cotVorgabe > 0 ? p.cotVorgabe : Math.max(cotMin, Math.min(cotMax, cotTrag));
+    if (cot < cotMin - 1e-9 || cot > cotMax + 1e-9) {
+      res.hinweise.push(`cot θ = ${cot.toFixed(2)} liegt außerhalb des zulässigen Bereichs ${cotMin.toFixed(1)} … ${cotMax.toFixed(2)}.`);
+      res.cotUnzulaessig = true;
+    }
+    res.z = z; res.nu1 = nu1; res.VRdcc = VRdcc; res.cotMax = cotMax; res.cotMin = cotMin; res.cot = cot;
+    res.VRdmax = VRdmax(cot); res.okMax = V <= res.VRdmax + 1e-6; res.ausnutzungMax = V / res.VRdmax;
+
+    // ---- Bügel ----
+    const aswErf = V / (z * fywd * cot);                              // [mm²/mm]
+    const rhoMin = 0.16 * bt.fctm / st.fyk;                           // NA DE, Gl. (9.5aDE)
+    const aswMin = rhoMin * bw;
+    const Aw1 = Math.PI * p.dsw * p.dsw / 4, schn = p.m * Aw1;         // Querschnittsfläche je Bügel
+    res.aswErf = aswErf; res.aswMin = aswMin; res.rhoMin = rhoMin;
+    res.aswMass = res.noetigBew ? Math.max(aswErf, aswMin) : aswMin;   // ohne Nachweisbedarf: konstruktive Mindestbewehrung
+    res.schnittflaeche = schn; res.dsw = p.dsw; res.m = p.m;
+    const rel = V / res.VRdmax;
+    const sTab = rel <= 0.3 ? Math.min(0.7 * h, 300) : rel <= 0.6 ? Math.min(0.5 * h, 300) : Math.min(0.25 * h, 200);
+    res.sMax = Math.min(sTab, 0.75 * d);
+    res.sErf = schn / res.aswMass;
+    res.s = p.sVorgabe > 0 ? p.sVorgabe : Math.max(50, Math.floor(Math.min(res.sErf, res.sMax) / 25) * 25);
+    res.aswVorh = schn / res.s;
+    res.okAsw = res.aswVorh + 1e-9 >= res.aswMass;
+    res.okS = res.s <= res.sMax + 1e-9;
+    res.dFtd = 0.5 * V * cot;                                          // zusätzliche Längszugkraft (Versatzmaß)
+    res.dAs = res.dFtd / st.fyd;
+    if (res.sErf < 75) res.hinweise.push("Erforderlicher Bügelabstand unter 75 mm: größeren Bügeldurchmesser oder höhere Schnittigkeit wählen.");
+    if (!res.okMax) res.hinweise.push("V_Ed > V_Rd,max: Druckstrebe überlastet. Querschnitt (b_w, h) oder Betonfestigkeit erhöhen.");
+    if (q.typ === "plattenbalken") res.hinweise.push("Plattenbalken: Nachweis mit der Stegbreite b_w; der Gurtanschluss (Schubkraft zwischen Gurt und Steg) ist nicht erfasst.");
+    return res;
   }
 }
