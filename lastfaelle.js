@@ -12,18 +12,18 @@
 /** Kategorien veränderlicher Einwirkungen mit Kombinationsbeiwerten [ψ0, ψ1, ψ2] (DIN EN 1990/NA, Tab. NA.A.1.1) */
 const EW_KATEGORIEN = {
   "-":   { text: "ohne (ψ = 1)", psi: [1, 1, 1] },
-  A:     { text: "Nutzlast A (Wohnen)", psi: [0.7, 0.5, 0.3] },
-  B:     { text: "Nutzlast B (Büro)", psi: [0.7, 0.5, 0.3] },
-  C:     { text: "Nutzlast C (Versammlung)", psi: [0.7, 0.7, 0.6] },
-  D:     { text: "Nutzlast D (Verkauf)", psi: [0.7, 0.7, 0.6] },
-  E:     { text: "Nutzlast E (Lager)", psi: [1.0, 0.9, 0.8] },
-  F:     { text: "Verkehr F (≤ 30 kN)", psi: [0.7, 0.7, 0.6] },
-  G:     { text: "Verkehr G (30–160 kN)", psi: [0.7, 0.5, 0.3] },
-  H:     { text: "Dach H", psi: [0, 0, 0] },
-  S1:    { text: "Schnee (≤ NN+1000 m)", psi: [0.5, 0.2, 0] },
-  S2:    { text: "Schnee (> NN+1000 m)", psi: [0.7, 0.5, 0.2] },
-  W:     { text: "Wind", psi: [0.6, 0.2, 0] },
-  T:     { text: "Temperatur", psi: [0.6, 0.5, 0] },
+  A:     { text: "A Wohnen", psi: [0.7, 0.5, 0.3] },
+  B:     { text: "B Büro", psi: [0.7, 0.5, 0.3] },
+  C:     { text: "C Versammlung", psi: [0.7, 0.7, 0.6] },
+  D:     { text: "D Verkauf", psi: [0.7, 0.7, 0.6] },
+  E:     { text: "E Lager", psi: [1.0, 0.9, 0.8] },
+  F:     { text: "F Verkehr ≤30 kN", psi: [0.7, 0.7, 0.6] },
+  G:     { text: "G Verkehr 30–160 kN", psi: [0.7, 0.5, 0.3] },
+  H:     { text: "H Dach", psi: [0, 0, 0] },
+  S1:    { text: "S1 Schnee ≤NN+1000", psi: [0.5, 0.2, 0] },
+  S2:    { text: "S2 Schnee >NN+1000", psi: [0.7, 0.5, 0.2] },
+  W:     { text: "W Wind", psi: [0.6, 0.2, 0] },
+  T:     { text: "T Temperatur", psi: [0.6, 0.5, 0] },
 };
 
 /** Art der Einwirkung */

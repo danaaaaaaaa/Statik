@@ -43,6 +43,8 @@ class ZeilenEditor {
           e = document.createElement("select");
           for (const [w, text] of Object.entries(typeof sp.opt === "function" ? sp.opt() : sp.opt)) e.add(new Option(text, w));
           e.value = z[sp.k];
+          if (sp.kurz) e.className = "sw-kurz";
+          e.title = e.selectedOptions[0] ? e.selectedOptions[0].text : "";   // voller Text als Tooltip
         } else if (sp.text) {
           e = document.createElement("input"); e.type = "text"; e.value = z[sp.k] || ""; e.className = "sw-text";
         } else {
@@ -309,7 +311,7 @@ class StatikSeite {
   constructor() {
     this.zeichnung = new StabwerkZeichnung(document.getElementById("sw-canvas"));
     const bei = () => this.aktualisiere();
-    const ew = () => ({ k: "ew", l: "Einw.", opt: () => this._ewOptionen() });
+    const ew = () => ({ k: "ew", l: "Einw.", kurz: true, opt: () => this._ewOptionen() });
     this.edKnoten = new ZeilenEditor(document.getElementById("sw-knoten"),
       [{ k: "x", l: "X [m]" }, { k: "z", l: "Z [m]" }, { k: "hx", l: "hält X", haken: true },
        { k: "hz", l: "hält Z", haken: true }, { k: "hphi", l: "hält φ", haken: true }],
@@ -319,8 +321,8 @@ class StatikSeite {
        { k: "gel", l: "Gelenk", opt: { "-": "–", anfang: "Anfang", ende: "Ende", beide: "beide" } }],
       z => ({ i: z.length ? z[z.length - 1].j : 1, j: (z.length ? z[z.length - 1].j : 1) + 1, A: 53.8, I: 8356, gel: "-" }), bei, "Stab");
     this.edEW = new ZeilenEditor(document.getElementById("sw-ew"),
-      [{ k: "name", l: "Bezeichnung", text: true }, { k: "art", l: "Art", opt: EW_ARTEN },
-       { k: "kat", l: "Kategorie", opt: () => Object.fromEntries(Object.entries(EW_KATEGORIEN).map(([k, v]) => [k, v.text])) },
+      [{ k: "name", l: "Name", text: true }, { k: "art", l: "Art", opt: EW_ARTEN },
+       { k: "kat", l: "Kat.", opt: () => Object.fromEntries(Object.entries(EW_KATEGORIEN).map(([k, v]) => [k, v.text])) },
        { k: "psi0", l: "ψ₀" }, { k: "psi1", l: "ψ₁" }, { k: "psi2", l: "ψ₂" }],
       () => StatikSeite.neueEinwirkung(), bei, "Einwirkung",
       { minZeilen: 1, feld: (z, k) => this._ewFeld(z, k), vorLoeschen: n => this._ewLoeschen(n) });
