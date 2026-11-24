@@ -90,3 +90,6 @@ Nicht enthalten: Temperatur, Stützensenkung, Theorie II. Ordnung, Schubverformu
 - Durchmesser (Zug, Druck, Bügel), Stäbe je Lage, d1/d2 automatisch aus Deckung und Verlegung (iterativ) oder manuell.
 - Stababstände: lichter Abstand gegen a_min = max(Ø; d_g+5; 20 mm); Platten zusätzlich s_max = min(2h; 250 mm).
 - Tabellenwerte (Mindestfestigkeit, Strukturklasse, c_min,dur) vor Verwendung an der Norm prüfen.
+
+## Version 10: Torsion im Stahlbau
+St.-Venant-Torsion: Eingabe T [kNm] je Reiter, Kennwerte I_t/W_t (I, U, T, Hohlprofile, Rohr, Kreis, Rechteck), T_Rd, Abminderung der Querkrafttragfähigkeit nach EN 1993-1-1, 6.2.7 (Gl. 6.26 bis 6.28). Nicht enthalten: Wölbkrafttorsion, Torsionsschubspannungen im Spannungsbild, Polygone und mehrzellige Querschnitte.

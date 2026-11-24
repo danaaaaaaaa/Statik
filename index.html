@@ -64,10 +64,11 @@
           <label><span>V<sub>z</sub> [kN]</span><input type="number" id="in-Vz" value="100" step="any"></label>
           <label><span>M<sub>y</sub> [kNm]</span><input type="number" id="in-My" value="50" step="any"></label>
           <label><span>M<sub>z</sub> [kNm]</span><input type="number" id="in-Mz" value="0" step="any"></label>
+          <label><span>T [kNm] <button type="button" class="info" data-info="torsion">i</button></span><input type="number" id="in-T" value="0" step="any"></label>
         </div>
         <p class="hinweis">y nach rechts, z nach unten, Ursprung im Schwerpunkt. N &gt; 0: Zug. M<sub>y</sub> &gt; 0: Zug unten.
           M<sub>z</sub> &gt; 0: Zug rechts. V<sub>z</sub> wirkt parallel zum Steg, V<sub>y</sub> parallel zu den Flanschen
-          (nur der Betrag geht in die Nachweise ein).</p>
+          (nur der Betrag geht in die Nachweise ein). T = St.-Venant-Torsionsmoment (Betrag).</p>
         <div class="knoepfe slots sg-uebernahme"><span class="slotname">SG übernehmen aus Reiter</span><span id="sg-quelle" class="knoepfe"></span></div>
 
         <h2>Berechnungsart <button type="button" class="info" data-info="berechnungsart">i</button></h2>
@@ -145,7 +146,7 @@
       <div class="eingabe">
         <div class="sw-knopfzeile"><button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
         <h2>Knoten und Lager</h2><div id="sw-knoten"></div>
-        <p class="hinweis">X nach rechts, Z nach unten (Meter). Rolle (Z gehalten) = verschieblich in X.</p>
+        <p class="hinweis">X nach rechts, Z nach unten (Meter). Angekreuzt = gehaltene Richtung (X, Z, Drehung φ): X+Z gelenkig, nur Z Rolle, X+Z+φ Einspannung.</p>
         <h2>Stäbe</h2><div id="sw-staebe"></div>
         <label><span>E-Modul [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
         <h2>Knotenlasten</h2><div id="sw-kl"></div>
@@ -205,6 +206,7 @@
         <div class="raster">
           <label><span>M<sub>Ed</sub> [kNm] <button type="button" class="info" data-info="MEd">i</button></span><input type="number" id="sb-M" value="250" step="any"></label>
           <label><span>N<sub>Ed</sub> [kN] <button type="button" class="info" data-info="NEdSb">i</button></span><input type="number" id="sb-N" value="0" step="any"></label>
+          <label><span>V<sub>Ed</sub> [kN] <button type="button" class="info" data-info="sbQuer">i</button></span><input type="number" id="sb-V" value="0" min="0" step="any"></label>
         </div>
         <p class="hinweis">M<sub>Ed</sub> &gt; 0: Zug unten, &lt; 0: Zug oben. N<sub>Ed</sub> &gt; 0: Zug, &lt; 0: Druck (im Betonschwerpunkt).</p>
 
@@ -221,6 +223,9 @@
           <label><span>Ø Druckbewehrung [mm]</span><select id="sb-dsd"></select></label>
           <label class="nur-balken"><span>Ø Bügel [mm]</span><select id="sb-dsw"></select></label>
           <label class="nur-balken"><span>Stäbe je Lage (0 = max.) <button type="button" class="info" data-info="sbLage">i</button></span><input type="number" id="sb-nl" value="0" min="0" step="1"></label>
+          <label><span>Schnittigkeit der Bügel</span><select id="sb-m"><option value="2" selected>2-schnittig</option><option value="4">4-schnittig</option><option value="1">1-schnittig</option></select></label>
+          <label><span>cot θ (0 = automatisch) <button type="button" class="info" data-info="sbQuer">i</button></span><input type="number" id="sb-cot" value="0" min="0" step="0.1"></label>
+          <label><span>Bügelabstand s [mm] (0 = auto)</span><input type="number" id="sb-sw" value="0" min="0" step="5"></label>
           <label><span>Größtkorn d<sub>g</sub> [mm]</span><select id="sb-dg"><option>8</option><option selected>16</option><option>32</option></select></label>
           <label><span>Vorhaltemaß Δc<sub>dev</sub> [mm] <button type="button" class="info" data-info="sbDeckung">i</button></span><input type="number" id="sb-dev" value="10" step="1"></label>
         </div>

@@ -13,7 +13,7 @@
  */
 
 /** Tabellenzeile: Bezeichnung | Wert | Einheit */
-const SchnittgroessenIds = ["in-N", "in-Vy", "in-Vz", "in-My", "in-Mz"];   // Eingabefelder der Schnittgrößen
+const SchnittgroessenIds = ["in-N", "in-Vy", "in-Vz", "in-My", "in-Mz", "in-T"];   // Eingabefelder der Schnittgrößen
 const zeile = (l, w, e = "") => `<tr><td>${l}</td><td>${w}</td><td>${e}</td></tr>`;
 /** Bezeichnung mit Info-Symbol (Formel und Norm, siehe info.js) */
 const lbl = (text, key) => text + infoBtn(key);
@@ -360,6 +360,8 @@ class TragfaehigkeitAnzeige {
     h += "</table>";
     h += '<p class="hinweis">V<sub>pl,Rd</sub> in der Spalte y–y gilt für V<sub>z</sub> (parallel zum Steg), in der Spalte z–z für V<sub>y</sub>.</p>';
 
+    h += TragfaehigkeitAnzeige.torsionHtml(ep.tors, ep, r);
+
     // ---- Plastischer Nachweis E-P (nur im Modus E-P) ----
     if (plastisch) {
     h += `<h3>Plastischer Nachweis E-P ${infoBtn("epNachweis")}</h3>`;
@@ -384,6 +386,7 @@ class TragfaehigkeitAnzeige {
     h += zeile("Querkraft V<sub>z</sub> / V<sub>pl,z,Rd</sub>", pz(ep.y.etaV), okz(ep.y.etaV));
     h += zeile("Querkraft V<sub>y</sub> / V<sub>pl,y,Rd</sub>", pz(ep.z.etaV), okz(ep.z.etaV));
     h += zeile("Normalkraft N / N<sub>pl,Rd</sub>", pz(ep.n), okz(ep.n));
+    if (ep.tors.T > 0) h += zeile("Torsion T / T<sub>Rd</sub>", pz(ep.tors.eta), okz(ep.tors.eta));
     h += zeile("Biegung + N + V (Interaktion)", pz(ep.eta), okz(ep.eta));
     h += "</table>";
     const ok = ep.etaMax <= 1 + 1e-9;
@@ -403,6 +406,35 @@ class TragfaehigkeitAnzeige {
     return h;
   }
 }
+
+/** Abschnitt Torsion (St. Venant): Kennwerte immer, Nachweis wenn T ≠ 0. */
+TragfaehigkeitAnzeige.torsionHtml = function (t, ep, r) {
+  const pz = v => (Number.isFinite(v) ? fmt(v * 100, 1) + " %" : "∞");
+  const ok = v => (v <= 1 + 1e-9 ? '<span class="ok">✓</span>' : '<span class="fehler">✗</span>');
+  let h = `<h3>Torsion (St. Venant) ${infoBtn("torsion")}</h3>`;
+  if (!t.vorhanden) {
+    return h + `<p class="hinweis">${t.T > 0 ? '<span class="fehler">Torsionskennwerte für diese Querschnittsform nicht ermittelt – Torsion nicht nachgewiesen.</span>' : "Torsionskennwerte für diese Querschnittsform nicht ermittelt."}</p>`;
+  }
+  h += "<table>";
+  h += zeile("I<sub>t</sub>", fmt(t.It / 1e4, 1), "cm⁴");
+  h += zeile("W<sub>t</sub>", fmt(t.Wt / 1e3, 1), "cm³");
+  h += zeile("τ<sub>Rd</sub> = f<sub>y</sub> / (√3·γ<sub>M0</sub>)", fmt(t.tauRd, 1), "N/mm²");
+  h += zeile("<b>T<sub>Rd</sub> = W<sub>t</sub>·τ<sub>Rd</sub></b>", `<b>${fmt(t.TRd, 2)}</b>`, "kNm");
+  if (t.T > 0) {
+    h += zeile("T<sub>Ed</sub>", fmt(t.T, 2), "kNm");
+    h += zeile("τ<sub>t,Ed</sub> = T<sub>Ed</sub> / W<sub>t</sub>", fmt(t.tau, 1), "N/mm²");
+    h += zeile("<b>T<sub>Ed</sub> / T<sub>Rd</sub></b>", `<b>${pz(t.eta)}</b>`, ok(t.eta));
+    const f = v => (r.Vz !== null ? fmt(v, 1) : "–");
+    const gl = { I: "Gl. 6.26", U: "Gl. 6.27" }[t.bauart] || "Gl. 6.28";
+    h += zeile("V<sub>pl,T,Rd</sub> für V<sub>z</sub> (" + gl + ")", r.Vz ? fmt(r.Vz * t.redZ, 1) : "–", "kN");
+    h += zeile("V<sub>pl,T,Rd</sub> für V<sub>y</sub> (Gl. 6.28)", r.Vy ? fmt(r.Vy * t.redY, 1) : "–", "kN");
+    h += zeile("V<sub>z,Ed</sub> / V<sub>pl,T,Rd</sub>", pz(ep.y.etaV), ok(ep.y.etaV));
+    if (ep.z.V > 0) h += zeile("V<sub>y,Ed</sub> / V<sub>pl,T,Rd</sub>", pz(ep.z.etaV), ok(ep.z.etaV));
+  }
+  h += "</table>";
+  h += `<p class="hinweis">${t.hinweis} Wölbkrafttorsion (I<sub>w</sub>, Bimoment) und Schubspannungen aus Torsion im Spannungsbild sind nicht erfasst.</p>`;
+  return h;
+};
 
 /* ======================= Anzeige: Spannungen ======================= */
 
@@ -578,7 +610,7 @@ class StahlbauSeite {
     this.spannung = new SpannungsAnzeige();
     this.wahl = new QuerschnittWahl("st-typ", "st-felder", () => this.aktualisiere(), "ipe", "st-slots", {
       holen: () => Object.fromEntries(SchnittgroessenIds.map(id => [id, document.getElementById(id).value])),
-      setzen: o => SchnittgroessenIds.forEach(id => { if (o[id] !== undefined) document.getElementById(id).value = o[id]; }),
+      setzen: o => SchnittgroessenIds.forEach(id => { document.getElementById(id).value = o[id] !== undefined ? o[id] : 0; }),
     });
 
     const sel = document.getElementById("st-guete");
@@ -619,11 +651,11 @@ class StahlbauSeite {
     const name = document.getElementById("st-guete").value;
     const fy = STAHLGUETEN.find(s => s[0] === name)[1];
     const gm0 = zahl("st-gm0") > 0 ? zahl("st-gm0") : 1;
-    const [N, Vy, Vz, My, Mz] = SchnittgroessenIds.map(zahl);
+    const [N, Vy, Vz, My, Mz, T] = SchnittgroessenIds.map(zahl);
     this._quellReiter();
 
     const r = new Stahlbemessung(q, fy, gm0).berechne();
-    const ep = new PlastischerNachweis(q, fy, gm0, r).berechne(N, Vy, Vz, My, Mz);
+    const ep = new PlastischerNachweis(q, fy, gm0, r).berechne(N, Vy, Vz, My, Mz, T);
     const schub = new Schubspannung(q, Vy, Vz);
 
     // E-P nur bei Klasse 1/2 möglich; sonst ist der Schalter gesperrt und es wird elastisch gerechnet
@@ -853,7 +885,7 @@ class StahlbetonSeite {
     document.getElementById("sb-x-XC").value = "XC1";
 
     const ids = ["sb-typ", "sb-b", "sb-h", "sb-bf", "sb-hf", "sb-d1", "sb-d2", "sb-beton", "sb-stahl", "sb-linie", "sb-M", "sb-N",
-      "sb-nutz", "sb-bauteil", "sb-ds", "sb-dsd", "sb-dsw", "sb-nl", "sb-dg", "sb-dev", "sb-dmodus",
+      "sb-V", "sb-m", "sb-cot", "sb-sw", "sb-nutz", "sb-bauteil", "sb-ds", "sb-dsd", "sb-dsw", "sb-nl", "sb-dg", "sb-dev", "sb-dmodus",
       ...Object.keys(Expositionsklassen.GRUPPEN).map(g => "sb-x-" + g)];
     ids.forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
     // Betonklasse aus dem Ergebnis übernehmen
@@ -907,8 +939,15 @@ class StahlbetonSeite {
         d1 = lay.d1;
       }
       res.epsC2 = beton.epsC2; res.nPR = beton.nPR;   // für Tabelle und Skizze
+      // Querkraft (nur wenn V_Ed angegeben und die Biegebemessung gelungen ist)
+      const VEd = zahl("sb-V");
+      const quer = VEd > 0 && !res.fehler
+        ? new Querkraftbemessung(q, beton, new Betonstahl()).bemesse({
+          VEd, NEd, d: res.d, Asl: lay.As, cotVorgabe: zahl("sb-cot"), m: Number(val("sb-m")),
+          dsw: Number(val("sb-dsw")), sVorgabe: zahl("sb-sw") })
+        : null;
       if (auto) { document.getElementById("sb-d1").value = +(q.d1 / 10).toFixed(2); document.getElementById("sb-d2").value = +(q.d2 / 10).toFixed(2); }
-      this.zeigeErgebnis(box, res, { beton, expo, dk, wahl, lay, ds, dsD, dsw, auto, q, platte, nl });
+      this.zeigeErgebnis(box, res, { beton, expo, dk, wahl, lay, ds, dsD, dsw, auto, q, platte, nl, quer });
       this.skizze.zeichne(q, res);
     } catch (e) {
       box.innerHTML = `<span class="fehler">${e.message}</span>`;
@@ -969,7 +1008,7 @@ class StahlbetonSeite {
     h += zeile(lbl("A<sub>s,max</sub>","Asmax"), fmt(r.AsMax / 100), haken(r.AsMaxOk) + " cm²");
     h += "</table>";
 
-    h += this._expositionHtml(x, haken) + this._bewehrungHtml(r, x, haken);
+    h += this._expositionHtml(x, haken) + this._bewehrungHtml(r, x, haken) + (x.quer ? this._querkraftHtml(x.quer, haken) : "");
 
     // Dehnungsebene über die relevanten Ebenen
     const dn = r.dehnung;
@@ -1000,6 +1039,29 @@ class StahlbetonSeite {
     box.innerHTML = h;
   }
 
+  /** Querkraftbemessung: Betontraganteil, Druckstrebe, Bügel. */
+  _querkraftHtml(v, haken) {
+    let h = `<p><b>Querkraftbemessung</b> ${infoBtn("sbQuer")}</p><table>`;
+    h += zeile("V<sub>Ed</sub>", fmt(v.V / 1e3, 1), "kN");
+    h += zeile("V<sub>Rd,c</sub>" + (v.VRdcMinMassgebend ? " (Mindestwert)" : ""), fmt(v.VRdc / 1e3, 1), haken(!v.noetigBew) + (v.noetigBew ? " Querkraftbewehrung nötig" : " keine nötig"));
+    h += zeile("Ausnutzung V<sub>Ed</sub>/V<sub>Rd,c</sub>", fmt(v.ausnutzungC, 2), "–");
+    h += zeile("z = 0,9·d", fmt(v.z / 10, 1), "cm");
+    h += zeile(`cot θ (zulässig ${fmt(v.cotMin, 1)} … ${fmt(v.cotMax, 2)})`, fmt(v.cot, 2), haken(!v.cotUnzulaessig));
+    h += zeile("V<sub>Rd,max</sub>", fmt(v.VRdmax / 1e3, 1), haken(v.okMax) + " kN");
+    h += zeile("Ausnutzung V<sub>Ed</sub>/V<sub>Rd,max</sub>", fmt(v.ausnutzungMax, 2), "–");
+    h += zeile("a<sub>sw,erf</sub> = V<sub>Ed</sub> / (z·f<sub>ywd</sub>·cot θ)", fmt(v.aswErf * 10, 2), "cm²/m");
+    h += zeile("a<sub>sw,min</sub> = ρ<sub>w,min</sub>·b<sub>w</sub>", fmt(v.aswMin * 10, 2), "cm²/m");
+    h += zeile(`Bügel Ø${v.dsw}, ${v.m}-schnittig: erf. s`, fmt(v.sErf, 0), "mm");
+    h += zeile("<b>gewählt s</b>", `<b>${fmt(v.s, 0)}</b>`, "mm");
+    h += zeile("a<sub>sw,vorh</sub> ≥ a<sub>sw</sub>", fmt(v.aswVorh * 10, 2), haken(v.okAsw) + " cm²/m");
+    h += zeile("s<sub>max</sub> (Norm)", fmt(v.sMax, 0), haken(v.okS) + " mm");
+    h += zeile("Zusatzzugkraft ΔF<sub>td</sub> = ½·V<sub>Ed</sub>·cot θ", fmt(v.dFtd / 1e3, 1), `kN (ΔA<sub>s</sub> = ${fmt(v.dAs / 100)} cm²)`);
+    h += "</table>";
+    if (!v.noetigBew) h += '<p class="hinweis">Bei V<sub>Ed</sub> ≤ V<sub>Rd,c</sub> ist rechnerisch keine Querkraftbewehrung nötig; bei Balken wird die Mindestbewehrung angesetzt.</p>';
+    if (v.hinweise.length) h += "<ul>" + v.hinweise.map(t => `<li>${t}</li>`).join("") + "</ul>";
+    return h;
+  }
+
   /** Expositionsklasse: erforderliche Festigkeitsklasse und Betondeckung. */
   _expositionHtml(x, haken) {
     const { expo, dk, beton } = x;
@@ -1015,7 +1077,7 @@ class StahlbetonSeite {
     h += zeile("Δc<sub>dev</sub>", fmt(dk.dev, 0), "mm");
     h += zeile("<b>c<sub>nom</sub></b>", `<b>${fmt(dk.cnom, 0)}</b>`, "mm");
     h += "</table>";
-    if (expo.schritte.length) h += `<p class="hinweis">Strukturklasse: Start S4; ${expo.schritte.join("; ")}.</p>`;
+    if (expo.schritte.length) h += `<p class="hinweis">Strukturklasse: Start S3; ${expo.schritte.join("; ")}.</p>`;
     return h;
   }
 

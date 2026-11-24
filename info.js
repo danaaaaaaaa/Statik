@@ -264,6 +264,19 @@ const INFO = {
       "Die Schubspannung τ wird weiterhin elastisch nach Jourawski berechnet.",
     normen: [`${EC3}, 5.4.3 (Plastisches Verfahren)`, `${EC3}, 5.5 (Klassifizierung)`, `${EC3}, 6.2.1 bis 6.2.10`],
   },
+  torsion: {
+    titel: "Torsion (St. Venant)",
+    formeln: [
+      "τ<sub>t,Ed</sub> = T<sub>Ed</sub> / W<sub>t</sub> ≤ τ<sub>Rd</sub> = f<sub>y</sub> / (√3·γ<sub>M0</sub>)",
+      "offen: I<sub>t</sub> = Σ b·t³/3; geschlossen (Bredt): I<sub>t</sub> = 4·A<sub>m</sub>²·t/U, W<sub>t</sub> = 2·A<sub>m</sub>·t",
+      "I/H: V<sub>pl,T,Rd</sub> = √(1 − τ<sub>t,Ed</sub> / (1,25·τ<sub>Rd</sub>)) · V<sub>pl,Rd</sub>  (6.26)",
+      "U: V<sub>pl,T,Rd</sub> = [ √(1 − τ<sub>t,Ed</sub> / (1,25·τ<sub>Rd</sub>)) − τ<sub>w,Ed</sub>/τ<sub>Rd</sub> ] · V<sub>pl,Rd</sub>  (6.27)",
+      "Hohlquerschnitt: V<sub>pl,T,Rd</sub> = [ 1 − τ<sub>t,Ed</sub> / τ<sub>Rd</sub> ] · V<sub>pl,Rd</sub>  (6.28)",
+    ],
+    text: "Berücksichtigt ist die primäre (St.-Venant-)Torsion. Bei offenen Profilen (I, U, T) wird sie meist durch Wölbkrafttorsion begleitet; diese (Bimoment, Wölbnormalspannungen) ist nicht erfasst, sodass offene Profile mit Torsion nur mit Zusatznachweis zu beurteilen sind. " +
+      "Das Torsionsmoment reduziert die Querkrafttragfähigkeit; mit dem abgeminderten V<sub>pl,T,Rd</sub> werden auch Biegung und Querkraft (ρ) nachgewiesen. Walzprofile: I<sub>t</sub> ohne Ausrundungen (tatsächlich etwas größer). Die Spannungsdiagramme enthalten keine Torsionsschubspannungen.",
+    normen: ["EN 1993-1-1, 6.2.7 (Torsion), Gl. (6.23) bis (6.28)", "Bredt'sche Formeln, z. B. Petersen, Statik und Stabilität der Baukonstruktionen"],
+  },
   epNachweis: {
     titel: "Plastischer Nachweis (Verfahren E-P)",
     formeln: [
@@ -514,6 +527,21 @@ const INFO = {
     text: "Balken: Stäbe liegen in Lagen innerhalb der Bügel; geprüft wird der lichte Abstand. Platte: Die Stäbe liegen gleichmäßig über die Breite b (b = 100 cm → je Meter); zusätzlich wird der größte Stababstand geprüft. Plattengeometrie darf die Strukturklasse um 1 verringern.",
     normen: [`${EC2}, 8.2(2) (lichter Abstand)`, `${EC2}, 9.3.1.1(3) (größter Stababstand Platten)`, `${EC2}/NA, Tab. 4.3DE (Strukturklasse)`],
   },
+  sbQuer: {
+    titel: "Querkraftbemessung (EC 2, NA DE)",
+    formeln: [
+      "V<sub>Rd,c</sub> = [ C<sub>Rd,c</sub>·k·(100·ρ<sub>l</sub>·f<sub>ck</sub>)<sup>1/3</sup> + 0,12·σ<sub>cp</sub> ]·b<sub>w</sub>·d ≥ ( v<sub>min</sub> + 0,12·σ<sub>cp</sub> )·b<sub>w</sub>·d",
+      "C<sub>Rd,c</sub> = 0,15/γ<sub>c</sub>; k = 1 + √(200/d) ≤ 2,0; ρ<sub>l</sub> = A<sub>sl</sub>/(b<sub>w</sub>·d) ≤ 0,02",
+      "V<sub>Rd,max</sub> = b<sub>w</sub>·z·ν<sub>1</sub>·f<sub>cd</sub> / (cot θ + tan θ), z = 0,9·d, ν<sub>1</sub> = 0,75·(1,1 − f<sub>ck</sub>/500) ≤ 0,75",
+      "a<sub>sw</sub> = V<sub>Ed</sub> / (z·f<sub>ywd</sub>·cot θ); a<sub>sw,min</sub> = 0,16·f<sub>ctm</sub>/f<sub>yk</sub>·b<sub>w</sub>",
+      "1,0 ≤ cot θ ≤ ( 1,2 + 1,4·σ<sub>cp</sub>/f<sub>cd</sub> ) / ( 1 − V<sub>Rd,cc</sub>/V<sub>Ed</sub> ) ≤ 3,0",
+      "ΔF<sub>td</sub> = ½·V<sub>Ed</sub>·cot θ (zusätzliche Längszugkraft)",
+    ],
+    text: "V<sub>Ed</sub> ist die Bemessungsquerkraft im Abstand d vom Auflagerrand (Betrag). Ist V<sub>Ed</sub> ≤ V<sub>Rd,c</sub>, braucht ein Bauteil rechnerisch keine Querkraftbewehrung (Balken erhalten die Mindestbewehrung). " +
+      "cot θ = 0: die App wählt den flachsten zulässigen Druckstrebenwinkel, bei dem V<sub>Rd,max</sub> noch reicht (wenigste Bügel). Der größte Bügelabstand folgt aus V<sub>Ed</sub>/V<sub>Rd,max</sub> (≤ 0,3: 0,7h; ≤ 0,6: 0,5h; sonst 0,25h, jeweils ≤ 300 bzw. 200 mm) und 0,75·d. " +
+      "Nicht erfasst: Lasten nahe am Auflager, Gurtanschluss, geneigte Bügel, Beton über C50/60. Tabellenwerte vor Verwendung an der Norm prüfen.",
+    normen: [`${EC2}, 6.2.2 und 6.2.3`, `${EC2}/NA, 6.2.2(1), Gl. (6.2a), (6.2b), NA.6.2.3(2)`, `${EC2}, 9.2.2 (Querkraftbewehrung)`],
+  },
   sbLage: {
     titel: "Verlegung: Stäbe je Lage",
     formeln: [
@@ -531,7 +559,7 @@ const INFO = {
       "c<sub>min</sub> = max( c<sub>min,b</sub> ; c<sub>min,dur</sub> ; 10 mm )",
       "c<sub>min,b</sub> = max( d<sub>sw</sub> ; d<sub>s</sub> − d<sub>sw</sub> ) &nbsp;(Bügel außen)",
     ],
-    text: "c<sub>min,dur</sub> folgt aus der Expositionsklasse über die Strukturklasse (Start S4 bei 50 Jahren, Zu-/Abschläge für Nutzungsdauer, Festigkeit, Plattengeometrie). Vorhaltemaß nach NA: Δc<sub>dev</sub> = 10 mm. " +
+    text: "c<sub>min,dur</sub> folgt aus der Expositionsklasse über die Strukturklasse (Start S3 bei 50 Jahren, bei XD1/XS1 +10 mm, XD2/XS2 +5 mm Sicherheitszuschlag, Zu-/Abschläge für Nutzungsdauer, Festigkeit, Plattengeometrie). Vorhaltemaß nach NA: Δc<sub>dev</sub> = 10 mm. " +
       "Die Tabellenwerte sind vor Verwendung an der Norm zu prüfen; Sonderfälle (Verbund, Brandschutz, Erdberührung) sind nicht erfasst.",
     normen: [`${EC2}, 4.4.1.1 bis 4.4.1.3`, `${EC2}/NA, Tab. 4.3DE, 4.4DE`, "Mindestfestigkeitsklassen: EC 2/NA, Tab. E.1DE"],
   },

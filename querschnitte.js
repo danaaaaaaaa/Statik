@@ -313,6 +313,42 @@ class Klassifizierung {
   }
 }
 
+/* ======================= Torsion (St. Venant) ======================= */
+
+/**
+ * Torsionskennwerte für reine St.-Venant-Torsion (primäre Torsion), Einheiten mm, mm⁴, mm³.
+ * Rückgabe: {art, It, Wt, tmax, hinweis}; τ_t,max = T / Wt, τ_t(t) = T·t/It im Querschnittsteil der Dicke t (offene Querschnitte).
+ * Wölbkrafttorsion (I_w) ist nicht erfasst.
+ */
+class Torsion {
+  /** Offener, dünnwandiger Querschnitt aus Rechtecken [{b: Länge, t: Dicke}]: It = Σ b·t³/3 */
+  static offen(teile, hinweis) {
+    const It = teile.reduce((s, p) => s + p.b * p.t ** 3 / 3, 0), tmax = Math.max(...teile.map(p => p.t));
+    return { art: "offen", It, Wt: It / tmax, tmax, hinweis: hinweis || "Offener Querschnitt: I<sub>t</sub> = Σ b·t³/3 (ohne Ausrundungen, leicht auf der sicheren Seite)." };
+  }
+
+  /** Geschlossener Hohlkasten konstanter Dicke (Bredt): It = 4·Am²·t/U, Wt = 2·Am·t. rm = Mittellinienradius der Ecken. */
+  static kasten(b, h, t, rm = 0) {
+    const Am = (b - t) * (h - t) - (4 - Math.PI) * rm * rm;
+    const U = 2 * (b - t + h - t) - (8 - 2 * Math.PI) * rm;
+    return { art: "geschlossen", It: 4 * Am * Am * t / U, Wt: 2 * Am * t, tmax: t,
+      hinweis: "Geschlossener Querschnitt nach Bredt (Mittellinienmaße, konstante Wanddicke)." };
+  }
+
+  /** Kreisring: It = π/32·(d⁴ − di⁴), Wt = It/(d/2) (exakt). Kreis: t = d/2. */
+  static rohr(d, t) {
+    const It = Math.PI / 32 * (d ** 4 - (d - 2 * t) ** 4);
+    return { art: "rohr", It, Wt: It / (d / 2), tmax: t, hinweis: "Kreisring: exakte St.-Venant-Werte." };
+  }
+
+  /** Vollrechteck b × h (Näherung nach Roark): It = (1/3)·h·b³·(1 − 0,63·b/h·(1 − b⁴/(12h⁴))), τmax = T·(3 + 1,8·b/h)/(h·b²). */
+  static rechteck(b, h) {
+    const a = Math.min(b, h), l = Math.max(b, h), r = a / l;
+    const It = l * a ** 3 / 3 * (1 - 0.63 * r * (1 - r ** 4 / 12));
+    return { art: "voll", It, Wt: l * a * a / (3 + 1.8 * r), tmax: a, hinweis: "Vollrechteck: Näherungsformeln (Roark); maximale Schubspannung in der Mitte der langen Seite." };
+  }
+}
+
 /* ======================= Basisklasse Querschnitt ======================= */
 
 class Querschnitt {
@@ -339,6 +375,7 @@ class Querschnitt {
   pruefe() {
     for (const f of this.constructor.felder) {
       if (f.optionen || f.text) continue; // Auswahl- und Textfelder prüfen die Unterklassen selbst
+      if (f.zeigeWenn && !f.zeigeWenn(this.w)) continue; // ausgeblendete Felder (z. B. Stegabstand bei 1 Steg) nicht prüfen
       if (f.nullErlaubt ? !(this.w[f.id] >= 0) : !(this.w[f.id] > 0)) return `${f.label} muss größer 0 sein.`;
     }
     return null;
@@ -455,6 +492,20 @@ class Querschnitt {
    * {art: 'I'|'U'|'RHS'|'CHS'|'voll', b, h, tf, tw, t}; null = allgemeine Form (numerische Auswertung).
    */
   nachweisdaten() { return null; }
+
+  /**
+   * Torsionskennwerte (St. Venant) aus den Nachweisdaten: I/U offen, RHS geschlossen, CHS Kreisring, voll = Rechteck.
+   * null = nicht ermittelbar (z. B. frei eingegebene Polygone, mehrzellige Querschnitte).
+   */
+  torsion() {
+    const d = this.nachweisdaten();
+    if (!d) return null;
+    if (d.art === "I" || d.art === "U") return Torsion.offen([{ b: d.b, t: d.tf }, { b: d.b, t: d.tf }, { b: d.h - 2 * d.tf, t: d.tw }]);
+    if (d.art === "RHS") return Torsion.kasten(d.b, d.h, d.t, this.ra ? this.ra - d.t / 2 : 0);
+    if (d.art === "CHS") return Torsion.rohr(d.b, d.t);
+    if (d.art === "voll") return Torsion.rechteck(d.b, d.h);
+    return null;
+  }
 
   /**
    * Plastische Nulllinie und plastisches Widerstandsmoment (reine Biegung, N = 0).
@@ -578,6 +629,7 @@ class TQuerschnitt extends Querschnitt {
     const { bf, hf, bw, h } = this.w;
     return [new RechteckTeil(0, 0, bf, hf), new RechteckTeil((bf - bw) / 2, hf, bw, h - hf)];
   }
+  torsion() { const { bf, hf, bw, h } = this.w; return Torsion.offen([{ b: bf, t: hf }, { b: h - hf, t: bw }]); }
   // geschweißter T-Querschnitt: A_v = t_w (h - t_f/2), Querkraft in Flanschrichtung nicht angegeben
   schubflaechen() {
     const { hf, bw, h } = this.w;
@@ -660,6 +712,7 @@ class Kreis extends Querschnitt {
   erzeugeTeile() { return [new KreisTeil(this.w.d / 2, this.w.d / 2, this.w.d)]; }
   klassen() { return Klassifizierung.vollquerschnitt(); }
   nachweisdaten() { return { art: "voll", b: this.w.d, h: this.w.d }; }
+  torsion() { return Torsion.rohr(this.w.d, this.w.d / 2); }
 }
 
 class Rohr extends Querschnitt {

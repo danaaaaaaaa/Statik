@@ -8,6 +8,7 @@
  *  - Querschnittsklassen und maßgebende Biegetragfähigkeit M_c,Rd
  *  - plastische Normalkrafttragfähigkeit N_pl,Rd
  *  - plastische Querkrafttragfähigkeit V_pl,Rd
+ *  - Torsion (St. Venant): T_Rd und Torsion mit Querkraft nach EN 1993-1-1, 6.2.7 (Klasse TorsionsNachweis)
  * Biegung, Normalkraft und Querkraft werden einzeln betrachtet (keine Interaktion).
  * Einheiten: Eingang mm, N/mm²; Ausgang kN und kNm.
  */
@@ -66,6 +67,40 @@ class Stahlbemessung {
 }
 
 /**
+ * Torsion nach EN 1993-1-1, 6.2.7 (St.-Venant-Torsion, Wölbtorsion nicht erfasst):
+ *  - elastisch:  τ_t,Ed = T_Ed / W_t ≤ f_y / (√3·γM0)  (T_Rd = W_t·f_y / (√3·γM0))
+ *  - Torsion und Querkraft (6.2.7(9)): V_pl,T,Rd nach Gl. (6.26) für I/H, (6.27) für U, (6.28) für Hohlquerschnitte
+ *    (alle anderen Querschnitte: linear wie (6.28), auf der sicheren Seite)
+ * Die Abminderung gilt für V_z; für V_y wird (6.28) angesetzt.
+ */
+class TorsionsNachweis {
+  constructor(q, fy, gammaM0, r) { this.q = q; this.fy = fy; this.g = gammaM0; this.r = r; }
+
+  /** @param {number} T Torsionsmoment [kNm]; Vz, Vy in kN (Beträge) */
+  berechne(T, Vz = 0, Vy = 0) {
+    const k = this.q.torsion();
+    const tauRd = this.fy / (Math.sqrt(3) * this.g);
+    const res = { T: Math.abs(T), vorhanden: !!k, tauRd, redZ: 1, redY: 1, eta: 0 };
+    if (!k) { res.eta = res.T > 0 ? Infinity : 0; return res; }
+    const art = this.q.nachweisdaten() ? this.q.nachweisdaten().art : null;
+    Object.assign(res, { It: k.It, Wt: k.Wt, tmax: k.tmax, art: k.art, hinweis: k.hinweis, bauart: art });
+    res.TRd = k.Wt * tauRd / 1e6;                              // kNm
+    res.tau = res.T * 1e6 / k.Wt;                              // maximale τ_t,Ed [N/mm²]
+    res.eta = res.TRd > 0 ? res.T / res.TRd : Infinity;
+    const x = res.tau / tauRd;
+    const wurzel = Math.sqrt(Math.max(0, 1 - x / 1.25));
+    if (art === "I") res.redZ = wurzel;                        // Gl. (6.26)
+    else if (art === "U") {                                     // Gl. (6.27): zusätzlich τ_w,Ed aus V_Ed
+      const Aw = this.r && this.r.Av && this.r.Av.z ? this.r.Av.z : null;
+      res.redZ = wurzel - (Aw ? Vz * 1e3 / Aw / tauRd : 0);
+    } else res.redZ = 1 - x;                                    // Gl. (6.28)
+    res.redY = 1 - x;
+    res.redZ = Math.max(0, res.redZ); res.redY = Math.max(0, res.redY);
+    return res;
+  }
+}
+
+/**
  * Plastischer Querschnittsnachweis (Verfahren E-P, EN 1993-1-1, 6.2.8 bis 6.2.10) für Klasse 1 und 2:
  *  - Querkraft:           V_Ed / V_pl,Rd ≤ 1
  *  - Biegung und Querkraft: ρ = (2·V_Ed/V_pl,Rd − 1)² bei V_Ed > 0,5·V_pl,Rd; M_V,Rd mit abgeminderter Streckgrenze im Schubbereich
@@ -82,7 +117,7 @@ class PlastischerNachweis {
    * @param {Object} r Ergebnis von Stahlbemessung.berechne() (Npl, Vz, Vy, Av, klassen)
    */
   constructor(q, fy, gammaM0, r) {
-    this.q = q; this.fyd = fy / gammaM0; this.r = r;
+    this.q = q; this.fyd = fy / gammaM0; this.g = gammaM0; this.r = r;
     this.d = q.nachweisdaten();
   }
 
@@ -112,11 +147,12 @@ class PlastischerNachweis {
   }
 
   /** Nachweiswerte einer Biegeachse. ax = 'y' (My, Vz) oder 'z' (Mz, Vy). */
-  _achse(ax, N, V, M) {
+  _achse(ax, N, V, M, red = 1) {
     const q = this.q, r = this.r, fyd = this.fyd;
     const pl = q.plastisch(ax), Wpl = pl.W;
     const Mpl = Wpl * fyd / 1e6;
-    const Vpl = ax === "y" ? r.Vz : r.Vy;
+    const Vpl0 = ax === "y" ? r.Vz : r.Vy;
+    const Vpl = Vpl0 ? Vpl0 * red : Vpl0;                       // ggf. durch Torsion abgemindert (V_pl,T,Rd)
     const Av = r.Av ? (ax === "y" ? r.Av.z : r.Av.y) : null;
     const n = Math.abs(N) / r.Npl;
 
@@ -132,10 +168,11 @@ class PlastischerNachweis {
   }
 
   /** Nachweis für die Schnittgrößen (N Zug +, V und M beliebiges Vorzeichen). */
-  berechne(N, Vy, Vz, My, Mz) {
+  berechne(N, Vy, Vz, My, Mz, T = 0) {
     const r = this.r, art = this.d ? this.d.art : null;
     const n = Math.abs(N) / r.Npl;
-    const y = this._achse("y", N, Vz, My), z = this._achse("z", N, Vy, Mz);
+    const tors = new TorsionsNachweis(this.q, this.fyd * this.g, this.g, r).berechne(T, Math.abs(Vz), Math.abs(Vy));
+    const y = this._achse("y", N, Vz, My, tors.redZ), z = this._achse("z", N, Vy, Mz, tors.redY);
 
     // Exponenten der Interaktion (6.41)
     let alpha = 1, beta = 1, bem = "allgemeiner Querschnitt: linearer Ansatz (auf der sicheren Seite)";
@@ -158,9 +195,9 @@ class PlastischerNachweis {
       klasseMax = Math.max(...ks);
     }
     return {
-      n, art, y, z, alpha, beta, bem, eta, klasseMax,
+      n, art, y, z, alpha, beta, bem, eta, klasseMax, tors,
       zulaessig: klasseMax === null ? null : klasseMax <= 2,
-      etaMax: Math.max(eta, y.etaV, z.etaV, n),
+      etaMax: Math.max(eta, y.etaV, z.etaV, n, tors.eta),
     };
   }
 }
