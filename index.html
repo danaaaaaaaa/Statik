@@ -62,13 +62,30 @@
             </select></label>
           <label><span>Faktor auf den Erddruck [–] <button type="button" class="info" data-info="erddruck">i</button></span><input type="number" id="ed-faktor" value="1" min="0" step="any"></label>
           <label><span>Geländeneigung β [°]</span><input type="number" id="ed-beta" value="0" min="0" step="any"></label>
+          <label><span>Wandneigung α [°] (+ = Kopf vom Boden weg)</span><input type="number" id="ed-alpha" value="0" step="any"></label>
+          <label><span>Wandreibung δ aus φ′ <button type="button" class="info" data-info="erdDelta">i</button></span><select id="ed-delta">
+            <option value="manuell">je Schicht eingeben</option><option value="0">δ = 0 (glatt)</option><option value="1/3">δ = ⅓·φ′</option>
+            <option value="1/2">δ = ½·φ′</option><option value="2/3">δ = ⅔·φ′ (rau)</option><option value="1">δ = φ′ (verzahnt)</option></select></label>
+          <label><span>Mindesterddruck: φ′<sub>min</sub> [°] (leer = aus)</span><input type="number" id="ed-phimin" value="" min="0" step="any"></label>
+          <label><span>Verdichtung: Walzenlast P′ [kN/m] (leer = aus)</span><input type="number" id="ed-verd" value="" min="0" step="any"></label>
           <label><span>Auflast p [kN/m²]</span><input type="number" id="ed-p" value="0" min="0" step="any"></label>
           <label><span>Grundwasser, Tiefe unter OK [m] (leer = keins)</span><input type="number" id="ed-gw" value="" min="0" step="any"></label>
           <label class="cb" style="grid-column:1 / -1"><input type="checkbox" id="ed-wasser" checked> Wasserdruck zusätzlich ausweisen</label>
         </div>
+        <h2>Passiver Erddruck <button type="button" class="info" data-info="erdPassiv">i</button></h2>
+        <div class="raster">
+          <label><span>Gleitfläche</span><select id="ed-gleit"><option value="eben">eben (Coulomb)</option><option value="gekruemmt">gekrümmt (Log-Spirale)</option></select></label>
+          <label><span>Verschiebung s [cm] (leer = voll mobilisiert)</span><input type="number" id="ed-mobs" value="" min="0" step="any"></label>
+          <label><span>Bruchverschiebung s<sub>B</sub> [% von H]</span><input type="number" id="ed-mobsb" value="10" min="0" step="any"></label>
+        </div>
+        <h2>Linienlasten (Abstand von der Wand)</h2>
+        <div id="ed-linien"></div>
+        <h2>Streifenlasten</h2>
+        <div id="ed-streifen"></div>
         <h2>Bodenschichten (von oben nach unten) <button type="button" class="info" data-info="erdSchicht">i</button></h2>
         <div id="ed-schichten"></div>
-        <button type="button" id="ed-beispiel">Beispiel laden</button>
+        <div class="sw-knopfzeile"><button type="button" id="ed-undo" disabled>↶ Rückgängig</button><button type="button" id="ed-redo" disabled>↷ Wiederherstellen</button>
+          <button type="button" id="ed-beispiel">Beispiel laden</button></div>
         <p class="hinweis">Die Wand reicht bis zur Unterkante der untersten Schicht. Beiwerte werden je Schicht aus φ′, δ und β berechnet; ein eingetragener Wert (unter „Erddruckbeiwerte“) ersetzt den berechneten.</p>
       </div>
       <div class="ergebnisse">
@@ -82,7 +99,7 @@
     <section id="tab-stahlbau" class="seite">
       <div class="eingabe">
         <h2>Querschnitt</h2>
-        <div class="knoepfe slots"><span class="slotname">Reiter</span><span id="st-slots" class="knoepfe"></span></div>
+        <div class="slots-block"><span class="slotname">Reiter (benennbar)</span><div id="st-slots"></div></div>
         <label><span>Form</span><select id="st-typ"></select></label>
         <div id="st-felder" class="raster"></div>
 
@@ -106,6 +123,19 @@
           (nur der Betrag geht in die Nachweise ein). T = St.-Venant-Torsionsmoment (Betrag).</p>
         <div class="knoepfe slots sg-uebernahme"><span class="slotname">SG übernehmen aus Reiter</span><span id="sg-quelle" class="knoepfe"></span></div>
 
+        <h2>Schweißnaht <button type="button" class="info" data-info="schweissnaht">i</button></h2>
+        <div class="raster">
+          <label style="grid-column:1 / -1"><span>Nahtart</span><select id="sn-art"><option value="kehl">Doppelkehlnaht (T-Stoß)</option><option value="stumpf">Stumpfnaht, durchgeschweißt</option></select></label>
+          <label><span id="sn-lbl-a">Nahtdicke a [mm]</span><input type="number" id="sn-a" value="4" min="0" step="any"></label>
+          <label><span>Nahtlänge l [mm]</span><input type="number" id="sn-l" value="300" min="0" step="any"></label>
+          <label><span>Anzahl Nähte n [–]</span><input type="number" id="sn-n" value="2" min="1" step="1"></label>
+          <label><span>γ<sub>M2</sub> [–]</span><input type="number" id="sn-gm2" value="1.25" step="any"></label>
+          <label class="cb" id="sn-kr-zeile" style="grid-column:1 / -1"><input type="checkbox" id="sn-kr" checked> Endkrater abziehen (l<sub>eff</sub> = l − 2a)</label>
+          <label><span>F<sub>l</sub> Längskraft [kN]</span><input type="number" id="sn-Fl" value="0" step="any"></label>
+          <label><span>F<sub>n</sub> ⟂ Anschlussfläche [kN]</span><input type="number" id="sn-Fn" value="100" step="any"></label>
+          <label><span>F<sub>q</sub> quer zur Naht [kN]</span><input type="number" id="sn-Fq" value="0" step="any"></label>
+        </div>
+        <p class="hinweis">Stahlgüte und γ<sub>M0</sub> (Stumpfnaht) stammen aus „Baustahl“. Kräfte sind die insgesamt von allen n Nähten zu übertragenden Beträge.</p>
         <h2>Berechnungsart <button type="button" class="info" data-info="berechnungsart">i</button></h2>
         <div class="knoepfe" id="st-modus">
           <button class="knopf aktiv" data-modus="ee">Elastisch (E-E)</button>
@@ -171,6 +201,8 @@
           <div>
             <h2>Tragfähigkeit</h2>
             <div id="tf-ergebnis" class="ergebnis"></div>
+            <h2>Schweißnahtnachweis <button type="button" class="info" data-info="schweissnaht">i</button></h2>
+            <div id="sn-ergebnis" class="ergebnis"></div>
           </div>
         </div>
       </div>
@@ -179,7 +211,9 @@
     <!-- ===== Statik: ebene Stabwerke ===== -->
     <section id="tab-statik" class="seite">
       <div class="eingabe">
-        <div class="sw-knopfzeile"><button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
+        <div class="slots-block"><span class="slotname">Speicherplätze für Berechnungen (benennbar)</span><div id="sw-slots"></div></div>
+        <div class="sw-knopfzeile"><button type="button" id="sw-undo" disabled>↶ Rückgängig</button><button type="button" id="sw-redo" disabled>↷ Wiederherstellen</button>
+          <button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
         <h2>Knoten und Lager</h2><div id="sw-knoten"></div>
         <p class="hinweis">X nach rechts, Z nach unten (Meter). Angekreuzt = gehaltene Richtung (X, Z, Drehung φ): X+Z gelenkig, nur Z Rolle, X+Z+φ Einspannung.</p>
         <h2>Federn an Knoten <button type="button" class="info" data-info="swFeder">i</button></h2><div id="sw-fed"></div>
@@ -187,7 +221,11 @@
         <h2>Stäbe</h2><div id="sw-staebe"></div>
         <p class="hinweis">Quersch. „manuell“: A und I selbst eingeben, E-Modul unten. Sonst werden A, I (um die starke Achse) und E aus Querschnitt und Material berechnet. „Ende“: anderer Querschnitt am Stabende → Stab linear gevoutet (A und I in der Tabelle gelten für den Anfang).</p>
         <h2>Bettung der Stäbe <button type="button" class="info" data-info="swFeder">i</button></h2><div id="sw-bett"></div>
-        <label><span>E-Modul für Stäbe „manuell“ [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
+        <div class="raster">
+          <label><span>E-Modul für Stäbe „manuell“ [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
+          <label><span>Wichte γ für Stäbe „manuell“ [kN/m³]</span><input type="number" id="sw-gam" value="78.5" step="any"></label>
+          <label class="cb" style="grid-column:1 / -1"><input type="checkbox" id="sw-eg"> Eigengewicht der Stäbe automatisch ansetzen (ständige Einwirkung G1) <button type="button" class="info" data-info="swEigengewicht">i</button></label>
+        </div>
         <h2>Einwirkungen <button type="button" class="info" data-info="swEinwirkung">i</button></h2><div id="sw-ew"></div>
         <p class="hinweis">Kategorie setzt die Kombinationsbeiwerte nach DIN EN 1990/NA vor; ψ-Werte sind änderbar. Jede Last wird in der Spalte „Einw." einer Einwirkung zugeordnet.</p>
         <h2>Knotenlasten</h2><div id="sw-kl"></div>
@@ -217,6 +255,18 @@
         <canvas id="sw-canvas" style="height:420px"></canvas>
         <p class="hinweis" id="sw-hinweis"></p>
         <p id="sw-komb-info"></p>
+        <details id="sw-uebernahme" data-k="sw-uebernahme"><summary>Schnittgrößen in die Bemessung übernehmen</summary>
+          <div class="raster">
+            <label><span>Stab</span><select id="sw-ue-stab"></select></label>
+            <label><span>Stelle</span><select id="sw-ue-stelle">
+              <option value="maxM">max M (Feld)</option><option value="minM">min M (Stütze)</option><option value="maxV">max |V|</option>
+              <option value="anfang">Stabanfang</option><option value="ende">Stabende</option><option value="x">bei x [m]</option></select></label>
+            <label><span>x [m] (nur bei „bei x“)</span><input type="number" id="sw-ue-x" value="0" step="any"></label>
+          </div>
+          <div id="sw-ue-werte" class="hinweis"></div>
+          <div class="sw-knopfzeile"><button type="button" id="sw-ue-sta">→ Stahlbau</button><button type="button" id="sw-ue-mas">→ Massivbau</button></div>
+          <p class="hinweis">Es werden die Werte der oben gewählten Kombination bzw. bei „Umhüllende“ die maßgebenden Extremwerte übernommen (N Zug +, M Zug an der z′-Seite = bei waagerechtem Stab unten). Übernommen werden N, V<sub>z</sub>, M<sub>y</sub> (Stahlbau) bzw. N<sub>Ed</sub>, V<sub>Ed</sub>, M<sub>Ed</sub> (Massivbau); Querschnitt und Bemessungsvoraussetzungen sind dort selbst zu prüfen.</p>
+        </details>
         <div id="sw-ergebnis" class="ergebnis"></div>
       </div>
     </section>
@@ -310,6 +360,9 @@
   </main>
 
   <script src="util.js"></script>
+  <script src="slots.js"></script>
+  <script src="verlauf.js"></script>
+  <script src="trenner.js"></script>
   <script src="info.js"></script>
   <script src="querschnitte.js"></script>
   <script src="profile.js"></script>
@@ -317,6 +370,7 @@
   <script src="elastoplastisch.js"></script>
   <script src="tragfaehigkeit.js"></script>
   <script src="ansicht3d.js"></script>
+  <script src="schweissnaht.js"></script>
   <script src="stahlbeton.js"></script>
   <script src="statik-querschnitte.js"></script>
   <script src="stabwerk.js"></script>

@@ -1,58 +1,130 @@
 /**
- * Lastermittlung: Erddruck auf eine lotrechte Wand (ebenes Problem, je m Wandlänge).
+ * Lastermittlung: Erddruck auf eine (ggf. geneigte) Wand (ebenes Problem, je m Wandlänge).
  *
- *  - Erddruckbeiwerte nach Coulomb/Müller-Breslau (horizontale Komponente, Wand lotrecht), wie in DIN 4085 für
- *    ebene Gleitflächen; je Schicht automatisch aus φ', δ und Geländeneigung β oder vom Anwender vorgegeben.
+ *  - Erddruckbeiwerte nach Coulomb/Müller-Breslau (horizontale Komponente, K_agh bzw. K_pgh) mit Wandneigung α,
+ *    Wandreibung δ und Geländeneigung β; je Schicht automatisch oder vom Anwender vorgegeben.
  *  - Erddruckarten: aktiv, erhöht aktiv (Mittel aus aktiv und Ruhedruck), Ruhedruck, passiv; frei wählbarer Faktor.
- *  - Schichtweise Wichten, Kohäsion, Wandreibung; Auflast und Grundwasser.
+ *  - Mindesterddruck (Vergleichsrechnung mit Mindest-φ′, c′ = 0), schichtweise Wichten, Kohäsion, Auflast, Grundwasser.
+ *  - Zusätze (nur aktiv/erhöht): Verdichtungserddruck (Ingold), Linienlasten, Streifenlasten
+ *    (Gleitflächen-/Ersatzlastverfahren, vereinfacht).
+ * Vorzeichen Wandneigung: α > 0 = Wandkopf vom Boden weg geneigt, α < 0 = zum Boden hin (wie in der Formel für K_agh).
  * Intern: m, kN, kN/m², Winkel in Grad (Eingabe) bzw. rad (Rechnung).
  */
 
 const GRAD = Math.PI / 180;
 const GAMMA_W = 10;            // Wichte des Wassers [kN/m³]
 
-/** Erddruckbeiwerte (horizontale Komponente) für lotrechte Wand. Rückgabe NaN, wenn die Formel nicht definiert ist. */
+/** Erddruckbeiwerte (horizontale Komponente). Rückgabe NaN, wenn die Formel nicht definiert ist. */
 class Erddruckbeiwerte {
-  /** Aktiv (Coulomb): K_agh = cos²φ / [1 + √(sin(φ+δ)·sin(φ−β)/(cosδ·cosβ))]² */
-  static aktiv(phi, delta, beta) {
-    const f = Math.sin(phi + delta) * Math.sin(phi - beta) / (Math.cos(delta) * Math.cos(beta));
-    if (f < 0 || beta > phi) return NaN;
-    return Math.cos(phi) ** 2 / (1 + Math.sqrt(f)) ** 2;
+  /** Aktiv (Coulomb, allgemein): K_agh = cos²(φ−α) / { cos²α · [1 + √(sin(φ+δ)·sin(φ−β) / (cos(α+δ)·cos(α−β)))]² } */
+  static aktiv(phi, delta, beta, alpha = 0) {
+    const nenn = Math.cos(alpha + delta) * Math.cos(alpha - beta);
+    const f = Math.sin(phi + delta) * Math.sin(phi - beta) / nenn;
+    if (!(f >= 0) || beta > phi || !(nenn > 0)) return NaN;
+    return Math.cos(phi - alpha) ** 2 / (Math.cos(alpha) ** 2 * (1 + Math.sqrt(f)) ** 2);
   }
 
-  /** Ruhedruck (Jaky), bei ansteigendem Gelände: K_0 = (1 − sinφ)·(1 + sinβ) */
+  /** Ruhedruck (Jaky), bei ansteigendem Gelände: K_0 = (1 − sinφ)·(1 + sinβ); Wandneigung bleibt unberücksichtigt */
   static ruhe(phi, beta) { return (1 - Math.sin(phi)) * (1 + Math.sin(beta)); }
 
-  /** Passiv (Coulomb, ebene Gleitfläche): K_pgh = cos²φ / [1 − √(sin(φ+δ)·sin(φ+β)/(cosδ·cosβ))]² */
-  static passiv(phi, delta, beta) {
-    const w = Math.sqrt(Math.sin(phi + delta) * Math.sin(phi + beta) / (Math.cos(delta) * Math.cos(beta)));
-    if (!(w < 1)) return NaN;
-    return Math.cos(phi) ** 2 / (1 - w) ** 2;
+  /** Passiv (Coulomb, ebene Gleitfläche): K_pgh = cos²(φ+α) / { cos²α · [1 − √(sin(φ+δ)·sin(φ+β) / (cos(α−δ)·cos(α−β)))]² } */
+  static passiv(phi, delta, beta, alpha = 0) {
+    const nenn = Math.cos(alpha - delta) * Math.cos(alpha - beta);
+    const w = Math.sqrt(Math.sin(phi + delta) * Math.sin(phi + beta) / nenn);
+    if (!(w < 1) || !(nenn > 0)) return NaN;
+    return Math.cos(phi + alpha) ** 2 / (Math.cos(alpha) ** 2 * (1 - w) ** 2);
+  }
+
+  /**
+   * Passiv, gekrümmte Gleitfläche (Log-Spirale), lotrechte Wand, waagerechtes Gelände (Lancellotta 2002):
+   * K_pgh = [cosδ + √(sin²φ − sin²δ)] / (1 − sinφ) · exp(2·θ·tanφ),  θ = ½·[δ + arcsin(sinδ/sinφ)]
+   */
+  static passivGekruemmt(phi, delta) {
+    if (phi <= 0) return 1;
+    const d = Math.min(delta, phi), th = 0.5 * (d + Math.asin(Math.sin(d) / Math.sin(phi)));
+    return (Math.cos(d) + Math.sqrt(Math.max(0, Math.sin(phi) ** 2 - Math.sin(d) ** 2))) / (1 - Math.sin(phi)) * Math.exp(2 * th * Math.tan(phi));
+  }
+
+  /**
+   * Ebene Gleitfläche des Wandgewichtskeils (aktiv): Winkel ϑ_a der Gleitfläche gegen die Horizontale [rad].
+   * Der Keil mit der größten Erddruckkraft wird numerisch gesucht (Gleichgewicht W + R + E = 0).
+   */
+  static gleitwinkel(phi, delta, alpha, beta) {
+    let bestTh = Math.PI / 4 + phi / 2, best = -Infinity;
+    for (let th = 0.5 * GRAD; th < 89.9 * GRAD; th += 0.05 * GRAD) {
+      const k = Erddruckbeiwerte._keil(phi, delta, alpha, beta, th);
+      if (k && k.F > best) { best = k.F; bestTh = th; }
+    }
+    return bestTh;
+  }
+
+  /** Keilgleichgewicht (h = 1, γ = 1): Horizontalkraft F auf die Wand, nur wenn Normalkräfte positiv sind. */
+  static _keil(phi, delta, alpha, beta, th) {
+    const a = -alpha, L = 1 / Math.cos(a), T = [L * Math.sin(a), 1];
+    const t = (1 - T[0] * Math.tan(beta)) / (Math.sin(th) - Math.cos(th) * Math.tan(beta));
+    if (!(t > 0)) return null;
+    const G = [t * Math.cos(th), t * Math.sin(th)];
+    if (G[0] < T[0] - 1e-9) return null;
+    const W = Math.abs(T[0] * G[1] - G[0] * T[1]) / 2;
+    const r = [-Math.sin(th) + Math.tan(phi) * Math.cos(th), Math.cos(th) + Math.tan(phi) * Math.sin(th)];
+    const f = [Math.cos(a) + Math.tan(delta) * Math.sin(a), -Math.sin(a) + Math.tan(delta) * Math.cos(a)];
+    const det = r[0] * f[1] - r[1] * f[0];
+    const N = -W * f[0] / det, P = r[0] * W / det;
+    return N < 0 || P < 0 ? null : { F: P * f[0] };
+  }
+
+  /** Horizontale Erddruckkraft je Einheit lotrechter Last auf der Geländeoberfläche (Gleitfläche ϑ vorgegeben). */
+  static lastbeiwert(phi, delta, alpha, theta) {
+    const a = -alpha;
+    const r = [-Math.sin(theta) + Math.tan(phi) * Math.cos(theta), Math.cos(theta) + Math.tan(phi) * Math.sin(theta)];
+    const f = [Math.cos(a) + Math.tan(delta) * Math.sin(a), -Math.sin(a) + Math.tan(delta) * Math.cos(a)];
+    const det = r[0] * f[1] - r[1] * f[0], P = r[0] / det;
+    return P * f[0];
   }
 }
 
 /** Erddruckberechnung für einen geschichteten Boden. */
 class Erddruck {
   /**
-   * @param {{art:string, faktor:number, p:number, beta:number, gw:number, wasser:boolean,
+   * @param {{art:string, faktor:number, p:number, beta:number, alpha:number, phimin:number, verd:number, gw:number, wasser:boolean,
+   *          linien:Array<{Q:number,a:number}>, streifen:Array<{q:number,a:number,b:number}>,
    *          schichten:Array<{name:string,d:number,g:number,gs:number,phi:number,c:number,delta:number,ka:number,k0:number,kp:number}>}} m
-   *   art: "aktiv" | "erhoeht" | "ruhe" | "passiv"; p: Auflast [kN/m²]; beta: Geländeneigung [°];
+   *   art: "aktiv" | "erhoeht" | "ruhe" | "passiv"; p: Auflast [kN/m²]; beta: Geländeneigung [°]; alpha: Wandneigung [°];
+   *   phimin: Mindest-φ′ für den Mindesterddruck [°] (0/NaN = aus); verd: Walzenlast P′ [kN/m] (0 = aus);
    *   gw: Grundwasser, Tiefe unter Geländeoberkante [m] (NaN = kein Grundwasser); ka/k0/kp: vorgegebene Beiwerte (NaN = berechnen)
    */
-  constructor(m) { this.m = m; }
+  constructor(m) {
+    // Wandreibung als Anteil von φ′ (DIN-4085-Auswahl): überschreibt δ je Schicht, sonst gelten die Eingaben
+    const an = m.deltaAnteil;
+    this.m = Number.isFinite(an) && an >= 0 ? { ...m, schichten: m.schichten.map(s => ({ ...s, delta: an * s.phi })) } : m;
+  }
 
-  /** Beiwerte je Schicht: automatisch oder vorgegeben. */
+  /** Mobilisierungsgrad ρ des Erdwiderstands (0…1) aus Verschiebung s und Bruchverschiebung s_B = sbRel·H (Parabelansatz) */
+  mobilisierung(H) {
+    const s = this.m.mobS, sb = (this.m.mobSb || 0) / 100 * H * 100;   // s in cm, s_B in % von H (H in m → cm)
+    if (!(s > 0) || !(sb > 0)) return 1;
+    return s >= sb ? 1 : 1 - (1 - s / sb) ** 2;
+  }
+
+  _aktivZusatz() { return this.m.art === "aktiv" || this.m.art === "erhoeht"; }
+  _linien() { return (this.m.linien || []).filter(l => l.Q > 0); }
+  _streifen() { return (this.m.streifen || []).filter(s => s.q > 0 && s.b > 0); }
+  _phimin() { return this.m.phimin > 0 ? this.m.phimin : 0; }
+
+  /** Beiwerte je Schicht: automatisch oder vorgegeben (plus Mindesterddruck-Beiwert). */
   beiwerte() {
-    const b = this.m.beta * GRAD;
+    const b = this.m.beta * GRAD, al = (this.m.alpha || 0) * GRAD, pm = this._phimin();
     return this.m.schichten.map(s => {
       const phi = s.phi * GRAD, del = s.delta * GRAD;
       const auto = {
-        ka: phi === 0 ? 1 : Erddruckbeiwerte.aktiv(phi, del, b),
+        ka: phi === 0 ? 1 : Erddruckbeiwerte.aktiv(phi, del, b, al),
         k0: phi === 0 ? 1 : Erddruckbeiwerte.ruhe(phi, b),
-        kp: phi === 0 ? 1 : Erddruckbeiwerte.passiv(phi, del, b),
+        kp: phi === 0 ? 1 : (this.m.gleit === "gekruemmt" && al === 0 && b === 0 ? Erddruckbeiwerte.passivGekruemmt(phi, del) : Erddruckbeiwerte.passiv(phi, del, b, al)),
       };
       const pick = (u, a) => (Number.isFinite(u) && u > 0 ? u : a);
-      return { auto, ka: pick(s.ka, auto.ka), k0: pick(s.k0, auto.k0), kp: pick(s.kp, auto.kp) };
+      let kmin = 0;
+      if (pm > 0) { const k = Erddruckbeiwerte.aktiv(pm * GRAD, Math.min(del, pm * GRAD), b, al); kmin = Number.isFinite(k) ? k : 0; }
+      return { auto, ka: pick(s.ka, auto.ka), k0: pick(s.k0, auto.k0), kp: pick(s.kp, auto.kp), kmin };
     });
   }
 
@@ -61,7 +133,12 @@ class Erddruck {
     const m = this.m;
     if (!m.schichten.length) return "Bitte mindestens eine Schicht eingeben.";
     if (!(m.beta >= 0 && m.beta < 90) || !(m.p >= 0)) return "Geländeneigung (0…90°) und Auflast (≥ 0) prüfen.";
+    if (!(m.alpha === undefined || (m.alpha > -45 && m.alpha < 60))) return "Wandneigung α zwischen −45° und 60° eingeben.";
     if (!(m.faktor > 0)) return "Der Faktor muss größer 0 sein.";
+    if (m.phimin > 0 && !(m.phimin < 60)) return "Mindest-φ′ zwischen 0° und 60° eingeben (leer = ohne Mindesterddruck).";
+    if (!(!m.verd || m.verd >= 0)) return "Walzenlast P′ ≥ 0 eingeben.";
+    for (const [n, l] of (m.linien || []).entries()) if (!(l.Q >= 0 && l.a > 0)) return `Linienlast ${n + 1}: Q ≥ 0 und Abstand a > 0 eingeben.`;
+    for (const [n, s] of (m.streifen || []).entries()) if (!(s.q >= 0 && s.a >= 0 && s.b > 0)) return `Streifenlast ${n + 1}: q ≥ 0, Abstand a ≥ 0 und Breite b > 0 eingeben.`;
     for (const [n, s] of m.schichten.entries()) {
       const nr = `Schicht ${n + 1}`;
       if (!(s.d > 0)) return `${nr}: Die Dicke muss größer 0 sein.`;
@@ -72,17 +149,17 @@ class Erddruck {
     }
     const k = this.beiwerte();
     for (const [n, s] of m.schichten.entries()) {
-      if (m.art !== "ruhe" && m.art !== "passiv" && !Number.isFinite(k[n].ka)) return `Schicht ${n + 1}: K<sub>agh</sub> nicht berechenbar (Geländeneigung β größer als φ′?). Beiwert manuell eingeben.`;
+      if (m.art !== "ruhe" && m.art !== "passiv" && !Number.isFinite(k[n].ka)) return `Schicht ${n + 1}: K<sub>agh</sub> nicht berechenbar (β größer als φ′ oder Wandneigung zu groß?). Beiwert manuell eingeben.`;
       if (m.art === "passiv" && !Number.isFinite(k[n].kp)) return `Schicht ${n + 1}: K<sub>pgh</sub> nicht berechenbar. Beiwert manuell eingeben.`;
     }
     return null;
   }
 
-  /** Berechnung: Spannungsverlauf, Stücke (lineare Abschnitte), Resultierende. */
+  /** Berechnung: Spannungsverlauf, Stücke (lineare Abschnitte), Zusätze, Resultierende. */
   berechne() {
     const fehler = this.pruefe(); if (fehler) return { fehler };
     const m = this.m, K = this.beiwerte(), gw = Number.isFinite(m.gw) && m.gw >= 0 ? m.gw : Infinity;
-    const H = m.schichten.reduce((a, s) => a + s.d, 0), hinweise = [];
+    const H = m.schichten.reduce((a, s) => a + s.d, 0), hinweise = [], al = (m.alpha || 0) * GRAD;
 
     // Segmente (an Schichtgrenzen und Grundwasserspiegel geteilt) mit effektiver vertikaler Spannung σ'v
     const seg = [];
@@ -98,51 +175,128 @@ class Erddruck {
       z += s.d;
     });
 
-    // Erddruckspannungen je Segment; bei aktivem Druck Nulldurchgang (Zugzone) berücksichtigen
-    const f = m.faktor, art = m.art, stuecke = [];
-    let zug = false;                                   // Zugzone (negativer aktiver Erddruck) vorhanden?
+    // Erddruckspannungen je Segment; bei aktivem Druck Nulldurchgang (Zugzone) bzw. Mindesterddruck berücksichtigen
+    const f = m.faktor, art = m.art, stuecke = [], mitMin = this._phimin() > 0, rho = art === "passiv" ? this.mobilisierung(H) : 1;
+    let zug = false, minMass = false;
     seg.forEach(sg => {
       const s = m.schichten[sg.i], k = K[sg.i], c = s.c;
-      const fa = v => k.ka * v - 2 * c * Math.sqrt(k.ka), fp = v => k.kp * v + 2 * c * Math.sqrt(k.kp), f0 = v => k.k0 * v;
-      const e = v => f * (art === "aktiv" ? Math.max(0, fa(v)) : art === "ruhe" ? f0(v) : art === "passiv" ? fp(v)
-        : 0.5 * (Math.max(0, fa(v)) + f0(v)));
+      const fa = v => k.ka * v - 2 * c * Math.sqrt(k.ka), fm = v => k.kmin * v, fp = v => k.kp * v + 2 * c * Math.sqrt(k.kp), f0 = v => k.k0 * v;
+      const ea = v => Math.max(fa(v), fm(v), 0);          // aktiv: nie kleiner als Mindesterddruck bzw. null
+      const e = v => f * (art === "aktiv" ? ea(v) : art === "ruhe" ? f0(v) : art === "passiv" ? f0(v) + rho * (fp(v) - f0(v)) : 0.5 * (ea(v) + f0(v)));
       let teile = [[sg.z1, sg.z2, sg.sv1, sg.sv2]];
-      if ((art === "aktiv" || art === "erhoeht") && fa(sg.sv1) < -1e-9) zug = true;
-      if ((art === "aktiv" || art === "erhoeht") && c > 0 && (fa(sg.sv1) < 0) !== (fa(sg.sv2) < 0)) {
-        const svN = 2 * c * Math.sqrt(k.ka) / k.ka, zN = sg.z1 + (svN - sg.sv1) / sg.gam;
-        teile = [[sg.z1, zN, sg.sv1, svN], [zN, sg.z2, svN, sg.sv2]];
+      if (art === "aktiv" || art === "erhoeht") {
+        if (fa(sg.sv1) < fm(sg.sv1) - 1e-9) { if (k.kmin > 0 && fm(sg.sv1) > fa(sg.sv1)) minMass = true; if (fa(sg.sv1) < -1e-9 && !(k.kmin > 0)) zug = true; }
+        const d1 = fa(sg.sv1) - fm(sg.sv1), d2 = fa(sg.sv2) - fm(sg.sv2);
+        if (c > 0 && (d1 < 0) !== (d2 < 0) && k.ka > k.kmin) {
+          const svN = 2 * c * Math.sqrt(k.ka) / (k.ka - k.kmin), zN = sg.z1 + (svN - sg.sv1) / sg.gam;
+          teile = [[sg.z1, zN, sg.sv1, svN], [zN, sg.z2, svN, sg.sv2]];
+        }
       }
       for (const [z1, z2, v1, v2] of teile) stuecke.push({ i: sg.i, z1, z2, sv1: v1, sv2: v2, e1: e(v1), e2: e(v2), gam: sg.gam });
     });
     if (zug)
       hinweise.push("Bei Kohäsion entsteht oben eine Zugzone: der aktive Erddruck wird dort zu null gesetzt (kein Zug an der Wand).");
+    if (minMass)
+      hinweise.push(`Mindesterddruck maßgebend (Vergleichsrechnung mit φ′ = ${fmt(this._phimin(), 1)}°, c′ = 0): in Bereichen mit Kohäsion wird der Erddruck nach unten begrenzt.`);
 
-    // Resultierende: Eh = Σ Trapezflächen, Angriffshöhe über Wandfuß aus dem Moment
+    // Resultierende (Boden + Auflast): Eh = Σ Trapezflächen, Angriffshöhe über Wandfuß aus dem Moment
     let Eh = 0, Mfuss = 0, Ev = 0;
     for (const t of stuecke) {
       const dz = t.z2 - t.z1, E = (t.e1 + t.e2) / 2 * dz;
       const zc = (t.e1 + t.e2) > 1e-12 ? t.z1 + dz * (t.e1 + 2 * t.e2) / (3 * (t.e1 + t.e2)) : t.z1 + dz / 2;
       t.E = E; t.zc = zc; Eh += E; Mfuss += E * (H - zc);
-      if (art === "aktiv" || art === "passiv") Ev += E * Math.tan(m.schichten[t.i].delta * GRAD);
+      const dl = m.schichten[t.i].delta * GRAD;
+      if (art === "aktiv") Ev += E * Math.tan(al + dl);               // + = abwärts auf die Wand
+      if (art === "passiv") Ev += E * Math.tan(al - dl);
     }
     // Wasserdruck (hydrostatisch, getrennt ausgewiesen)
     const hw = Math.max(0, H - gw), W = 0.5 * GAMMA_W * hw * hw, ezW = hw / 3;
-    if (art === "passiv") hinweise.push("Passiver Erddruck: Coulomb mit ebener Gleitfläche überschätzt K<sub>p</sub> bei δ<sub>p</sub> &gt; φ′/3 (DIN 4085: gekrümmte Gleitfläche). Für Nachweise Beiwerte prüfen oder manuell vorgeben und die zur Mobilisierung nötige Verschiebung beachten.");
-    if (art === "erhoeht") hinweise.push("Erhöhter aktiver Erddruck: e = 0,5·(e<sub>a</sub> + e<sub>0</sub>); Wandreibung wird nicht angesetzt (E<sub>v</sub> = 0).");
-    if (art === "ruhe") hinweise.push("Ruhedruck: Wandreibung wird nicht angesetzt (E<sub>v</sub> = 0); Kohäsion bleibt unberücksichtigt.");
-    if (m.beta > 0) hinweise.push("Geländeneigung β wirkt nur über die Beiwerte; die Auflast p wird als gleichmäßig verteilt auf der Geländeoberfläche angesetzt.");
 
-    const erg = { fehler: null, H, K, stuecke, Eh, Ev, ez: Eh > 1e-12 ? Mfuss / Eh : 0, W, ezW, hw, gw, hinweise };
-    erg.eMax = Math.max(1e-9, ...stuecke.map(t => Math.max(t.e1, t.e2)));
-    erg.uMax = GAMMA_W * hw;
+    const erg = { fehler: null, H, K, stuecke, Eh, Ev, ez: Eh > 1e-12 ? Mfuss / Eh : 0, W, ezW, hw, gw, hinweise, zusaetze: [] };
+    this._zusaetze(erg);
+
+    if (art === "passiv" && rho < 1) hinweise.push(`Mobilisierter Erdwiderstand: ρ = ${fmt(rho, 3)} (s = ${fmt(m.mobS, 1)} cm, s<sub>B</sub> = ${fmt(m.mobSb, 1)} % von H); e = e<sub>0</sub> + ρ·(e<sub>p</sub> − e<sub>0</sub>) (Parabelansatz, Näherung – Mobilisierungsfunktion nach Vogt/DIN 4085 prüfen).`);
+    if (art === "passiv" && m.gleit === "gekruemmt") hinweise.push(((m.alpha || 0) !== 0 || m.beta > 0) ? "Gekrümmte Gleitfläche nur für lotrechte Wand und waagerechtes Gelände implementiert – bei α ≠ 0 oder β &gt; 0 wird die ebene Gleitfläche verwendet." : "Passiv mit gekrümmter Gleitfläche (Log-Spirale nach Lancellotta, Näherung der Caquot-Kérisel-Werte); K<sub>pgh</sub> bei Bedarf mit den Tabellen der DIN 4085 abgleichen.");
+    if (art === "passiv" && m.gleit !== "gekruemmt") hinweise.push("Passiver Erddruck: Coulomb mit ebener Gleitfläche überschätzt K<sub>p</sub> bei δ<sub>p</sub> &gt; φ′/3 (DIN 4085: gekrümmte Gleitfläche). Für Nachweise Beiwerte prüfen oder manuell vorgeben und die zur Mobilisierung nötige Verschiebung beachten.");
+    if (art === "erhoeht") hinweise.push("Erhöhter aktiver Erddruck: e = 0,5·(e<sub>a</sub> + e<sub>0</sub>); Wandreibung wird nicht angesetzt (E<sub>v</sub> = 0).");
+    if (art === "ruhe") hinweise.push("Ruhedruck: Wandreibung und Wandneigung werden nicht angesetzt (E<sub>v</sub> = 0); Kohäsion bleibt unberücksichtigt.");
+    if (m.beta > 0) hinweise.push("Geländeneigung β wirkt nur über die Beiwerte; die Auflast p wird als gleichmäßig verteilt auf der Geländeoberfläche angesetzt.");
+    if ((m.alpha || 0) !== 0) hinweise.push(`Wandneigung α = ${fmt(m.alpha, 1)}° (${m.alpha > 0 ? "Wandkopf vom Boden weg" : "Wandkopf zum Boden hin"} geneigt): Tiefen z und Wandhöhe H sind lotrecht gemessen, e<sub>h</sub> ist die horizontale Komponente je m lotrechter Tiefe, E<sub>v</sub> = E<sub>h</sub>·tan(α ± δ).`);
+    if (!this._aktivZusatz() && (m.verd > 0 || this._linien().length || this._streifen().length))
+      hinweise.push("Verdichtungserddruck, Linien- und Streifenlasten werden nur bei aktivem bzw. erhöht aktivem Erddruck angesetzt.");
     return erg;
   }
 
-  /** Werte in der Tiefe z (für die Mausabfrage): σ'v, e_h, Wasserdruck und Schicht. */
+  /** Zusatzfiguren (Verdichtung, Linien-, Streifenlasten), Profil auf feinem Raster und Gesamtresultierende. */
+  _zusaetze(erg) {
+    const m = this.m, H = erg.H, al = (m.alpha || 0) * GRAD, st = erg.stuecke;
+    const e0 = z => { const t = st.find(s => z >= s.z1 - 1e-9 && z <= s.z2 + 1e-9); if (!t) return 0; const r = t.z2 > t.z1 ? (z - t.z1) / (t.z2 - t.z1) : 0; return t.e1 + (t.e2 - t.e1) * r; };
+    const defs = [];                       // {name, typ, f(z, e0), knicke:[z]}
+    if (this._aktivZusatz()) {
+      const s1 = m.schichten[0], phi = s1.phi * GRAD, del = s1.delta * GRAD, be = m.beta * GRAD;
+      if (m.verd > 0) {
+        // Ingold: σ_hc = √(2·P′·γ/π); z_c = σ_hc/(K_a·γ); z_e = σ_hc/(K_p·γ) (Rankine, Schicht 1)
+        const g = s1.g, kaR = Math.tan(Math.PI / 4 - phi / 2) ** 2, kpR = Math.tan(Math.PI / 4 + phi / 2) ** 2;
+        const shc = Math.sqrt(2 * m.verd * g / Math.PI), zc = shc / (kaR * g), ze = shc / (kpR * g);
+        const ec = z => z < ze ? kpR * g * z : z < zc ? shc : kaR * g * z;
+        defs.push({ name: "Verdichtung (Ingold)", typ: "verd", knicke: [ze, zc], f: (z, b) => Math.max(0, ec(z) - b), info: { shc, zc, ze } });
+        if (zc > H) erg.hinweise.push(`Verdichtungserddruck: Einflusstiefe z<sub>c</sub> = ${fmt(zc, 2)} m reicht bis unter den Wandfuß; es wird nur der Anteil bis H angesetzt.`);
+      }
+      const lin = this._linien(), str = this._streifen();
+      if (lin.length || str.length) {
+        const th = Erddruckbeiwerte.gleitwinkel(phi, del, al, be), kq = Erddruckbeiwerte.lastbeiwert(phi, del, al, th);
+        const tF = Math.tan(phi), tT = Math.tan(th);
+        erg.last = { th, kq, phi: s1.phi, delta: s1.delta };
+        lin.forEach((l, n) => {
+          const zo = l.a * tF, zu = l.a * tT, e = l.Q * kq / (l.a * (tT - tF));
+          defs.push({ name: `Linienlast ${n + 1}`, typ: "linie", knicke: [zo, zu], f: z => z >= zo && z <= zu ? e : 0, info: { E: l.Q * kq, zo, zu } });
+          if (zu > H) erg.hinweise.push(`Linienlast ${n + 1}: Die Lastausbreitung reicht bis ${fmt(zu, 2)} m, unter den Wandfuß (H = ${fmt(H, 2)} m); nur der Anteil bis H wird angesetzt.`);
+        });
+        str.forEach((s, n) => {
+          const c0 = s.q * kq / (tT - tF), a1 = Math.max(s.a, 1e-6), a2 = s.a + s.b;
+          defs.push({ name: `Streifenlast ${n + 1}`, typ: "streifen", knicke: [a1 * tF, a1 * tT, a2 * tF, a2 * tT], info: { E: s.q * s.b * kq },
+            f: z => { const ob = tF > 0 ? Math.min(a2, z / tF) : a2, un = Math.max(a1, z / tT); return ob > un ? c0 * Math.log(ob / un) : 0; } });
+          if (a2 * tT > H) erg.hinweise.push(`Streifenlast ${n + 1}: Die Lastausbreitung reicht bis ${fmt(a2 * tT, 2)} m, unter den Wandfuß; nur der Anteil bis H wird angesetzt.`);
+        });
+      }
+    }
+
+    // Raster: feine Teilung plus Knickpunkte (doppelt, um Sprünge abzubilden)
+    const zs = new Set([0, H]), n = 300;
+    for (let i = 1; i < n; i++) zs.add(H * i / n);
+    const knick = [...st.flatMap(t => [t.z1, t.z2]), ...defs.flatMap(d => d.knicke)];
+    for (const k of knick) if (k > 1e-6 && k < H - 1e-6) { zs.add(k - 1e-6); zs.add(k + 1e-6); }
+    const zl = [...zs].filter(v => v >= 0 && v <= H).sort((a, b) => a - b);
+    erg.profil = zl.map(zz => {
+      const b = e0(zz); let cum = b; const zus = defs.map(d => { const v = d.f(zz, b); cum += v; return v; });
+      return { z: zz, e0: b, zus, tot: cum };
+    });
+    // Resultierende je Zusatz (Trapezregel auf dem Raster)
+    let E = erg.Eh, M = erg.Eh * erg.ez, Ev = erg.Ev;
+    const del1 = m.schichten[0].delta * GRAD;
+    defs.forEach((d, k) => {
+      let Ek = 0, Mk = 0, emax = 0;
+      for (let i = 0; i + 1 < erg.profil.length; i++) {
+        const p = erg.profil[i], q = erg.profil[i + 1], dz = q.z - p.z, a = p.zus[k], b = q.zus[k];
+        Ek += (a + b) / 2 * dz; Mk += (a * (H - p.z) + b * (H - q.z)) / 2 * dz; emax = Math.max(emax, a, b);
+      }
+      erg.zusaetze.push({ name: d.name, typ: d.typ, E: Ek, ez: Ek > 1e-12 ? Mk / Ek : 0, eMax: emax, info: d.info });
+      E += Ek; M += Mk; if (m.art === "aktiv") Ev += Ek * Math.tan(al + del1);
+    });
+    erg.EhGes = E; erg.ezGes = E > 1e-12 ? M / E : 0; erg.EvGes = Ev;
+    erg.eMax = Math.max(1e-9, ...erg.profil.map(p => p.tot));
+    erg.uMax = GAMMA_W * erg.hw;
+  }
+
+  /** Werte in der Tiefe z (für die Mausabfrage): σ'v, e_h (Boden), Zusätze, Summe, Wasserdruck und Schicht. */
   static werteBei(erg, z) {
     const t = erg.stuecke.find(s => z >= s.z1 - 1e-9 && z <= s.z2 + 1e-9);
     if (!t) return null;
-    const r = t.z2 > t.z1 ? (z - t.z1) / (t.z2 - t.z1) : 0;
-    return { z, i: t.i, sv: t.sv1 + (t.sv2 - t.sv1) * r, e: t.e1 + (t.e2 - t.e1) * r, u: GAMMA_W * Math.max(0, z - erg.gw) };
+    const r = t.z2 > t.z1 ? (z - t.z1) / (t.z2 - t.z1) : 0, e = t.e1 + (t.e2 - t.e1) * r;
+    const P = erg.profil || []; let zus = (erg.zusaetze || []).map(() => 0);
+    for (let i = 0; i + 1 < P.length; i++) if (z >= P[i].z && z <= P[i + 1].z && P[i + 1].z > P[i].z) {
+      const q = (z - P[i].z) / (P[i + 1].z - P[i].z); zus = P[i].zus.map((v, k) => v + (P[i + 1].zus[k] - v) * q); break;
+    }
+    return { z, i: t.i, sv: t.sv1 + (t.sv2 - t.sv1) * r, e, zus, etot: e + zus.reduce((a, b) => a + b, 0), u: GAMMA_W * Math.max(0, z - erg.gw) };
   }
 }

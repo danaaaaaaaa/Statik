@@ -4,21 +4,21 @@
  * der E-Modul ergibt sich aus dem gewählten Material.
  */
 
-/** Materialien mit E-Modul [N/mm²]. Beton: Sekantenmodul E_cm nach EN 1992-1-1, Tab. 3.1; Holz: E_0,mean (EN 14080). */
+/** Materialien mit E-Modul [N/mm²] und Wichte γ [kN/m³] (EN 1991-1-1 Anh. A, Holz: Mittelwert der Rohdichte). Beton: Sekantenmodul E_cm nach EN 1992-1-1, Tab. 3.1; Holz: E_0,mean (EN 14080). */
 const MATERIALIEN = {
-  S235:   { text: "Baustahl S235/S275/S355/S460", E: 210000 },
-  edel:   { text: "Nichtrostender Stahl", E: 200000 },
-  alu:    { text: "Aluminium", E: 70000 },
-  C20:    { text: "Beton C20/25", E: 30000 },
-  C25:    { text: "Beton C25/30", E: 31000 },
-  C30:    { text: "Beton C30/37", E: 33000 },
-  C35:    { text: "Beton C35/45", E: 34000 },
-  C40:    { text: "Beton C40/50", E: 35000 },
-  C45:    { text: "Beton C45/55", E: 36000 },
-  C50:    { text: "Beton C50/60", E: 37000 },
-  GL24h:  { text: "Brettschichtholz GL24h", E: 11500 },
-  GL28h:  { text: "Brettschichtholz GL28h", E: 12600 },
-  eigen:  { text: "Eigener E-Modul", E: 210000 },
+  S235:   { text: "Baustahl S235/S275/S355/S460", E: 210000, gamma: 78.5 },
+  edel:   { text: "Nichtrostender Stahl", E: 200000, gamma: 79 },
+  alu:    { text: "Aluminium", E: 70000, gamma: 27 },
+  C20:    { text: "Beton C20/25", E: 30000, gamma: 25 },
+  C25:    { text: "Beton C25/30", E: 31000, gamma: 25 },
+  C30:    { text: "Beton C30/37", E: 33000, gamma: 25 },
+  C35:    { text: "Beton C35/45", E: 34000, gamma: 25 },
+  C40:    { text: "Beton C40/50", E: 35000, gamma: 25 },
+  C45:    { text: "Beton C45/55", E: 36000, gamma: 25 },
+  C50:    { text: "Beton C50/60", E: 37000, gamma: 25 },
+  GL24h:  { text: "Brettschichtholz GL24h", E: 11500, gamma: 4.2 },
+  GL28h:  { text: "Brettschichtholz GL28h", E: 12600, gamma: 4.5 },
+  eigen:  { text: "Eigener E-Modul", E: 210000, gamma: 25 },
 };
 
 /** Liste der Querschnittsdefinitionen (Karten) mit Typ, Maßen und Material. */
@@ -31,7 +31,7 @@ class QuerschnittsListe {
   setze(liste) { this.liste = liste; this.baue(); }
 
   /** Neuer Querschnitt (Standard: IPE 300, Baustahl). */
-  static neu() { return { typ: "ipe", werte: { profil: "IPE 300" }, mat: "S235", E: 210000 }; }
+  static neu() { return { typ: "ipe", werte: { profil: "IPE 300" }, mat: "S235", E: 210000, gamma: 25 }; }
 
   /** Querschnittsobjekt der Karte n (oder Fehlertext). */
   static erzeuge(q) {
@@ -45,7 +45,8 @@ class QuerschnittsListe {
     const r = QuerschnittsListe.erzeuge(q); if (r.fehler) return r;
     const E = q.mat === "eigen" ? q.E : MATERIALIEN[q.mat].E;
     if (!(E > 0)) return { fehler: "E-Modul muss größer 0 sein" };
-    return { A: r.qs.A / 100, I: r.qs.Iy / 1e4, E, titel: QUERSCHNITTE[q.typ].titel };
+    const gamma = q.mat === "eigen" ? (q.gamma ?? 25) : MATERIALIEN[q.mat].gamma;
+    return { A: r.qs.A / 100, I: r.qs.Iy / 1e4, E, gamma: gamma >= 0 ? gamma : 0, titel: QUERSCHNITTE[q.typ].titel };
   }
 
   /** Voute zwischen zwei Querschnittsdefinitionen (siehe VouteQuerschnitt). */
@@ -125,7 +126,11 @@ class QuerschnittsListe {
       e.disabled = q.mat !== "eigen"; el.appendChild(e);
       mat.addEventListener("input", () => { q.mat = mat.value; e.disabled = q.mat !== "eigen"; e.value = q.mat === "eigen" ? q.E : MATERIALIEN[q.mat].E; this._ergebnis(q, erg); this.bei(); });
       e.addEventListener("input", () => { q.E = parseFloat(e.value); this._ergebnis(q, erg); this.bei(); });
-      const reihe = document.createElement("div"); reihe.className = "sw-kfelder"; reihe.append(ml, el);
+      const gl = document.createElement("label"), gs = document.createElement("span"); gs.textContent = "Wichte γ [kN/m³]"; gl.appendChild(gs);
+      const ge = document.createElement("input"); ge.type = "number"; ge.step = "any"; ge.value = q.mat === "eigen" ? (q.gamma ?? 25) : MATERIALIEN[q.mat].gamma; ge.disabled = q.mat !== "eigen"; gl.appendChild(ge);
+      ge.addEventListener("input", () => { q.gamma = parseFloat(ge.value); this.bei(); });
+      mat.addEventListener("input", () => { ge.disabled = q.mat !== "eigen"; ge.value = q.mat === "eigen" ? (q.gamma ?? 25) : MATERIALIEN[q.mat].gamma; });
+      const reihe = document.createElement("div"); reihe.className = "sw-kfelder"; reihe.append(ml, el, gl);
       karte.appendChild(reihe); karte.appendChild(erg);
       this._ergebnis(q, erg);
       this.box.appendChild(karte);

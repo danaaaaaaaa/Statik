@@ -11,7 +11,7 @@ header { background: var(--blau); color: #fff; padding: .6rem 1rem; padding-top:
 header h1 { font-size: 1.15rem; margin: 0; }
 #bereich-titel { font-size: 1rem; opacity: .85; }
 
-.seite { display: none; padding: 1rem; gap: 1.25rem; grid-template-columns: minmax(300px, 380px) 1fr; align-items: start; }
+.seite { display: none; padding: 1rem; gap: 1.25rem; grid-template-columns: var(--links, minmax(300px, 380px)) 10px minmax(0, 1fr); column-gap: .2rem; align-items: start; }
 .seite.aktiv { display: grid; }
 .seite > * { min-width: 0; }
 
@@ -47,7 +47,7 @@ td button { border: 0; background: none; cursor: pointer; color: #b00020; font-s
 }
 
 /* Tablet / Handy: einspaltig */
-@media (max-width: 820px) { .seite.aktiv { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .seite.aktiv { grid-template-columns: 1fr !important; } .spalten-trenner { display: none; } }
 @media (max-width: 600px) {
   header { gap: .4rem; }
   .seite { padding: .7rem; }
@@ -178,8 +178,8 @@ h3.unter { font-size: .95rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid v
   #sw-ew select { min-width: 3.2rem; }
 }
 .sw-tab { width: 100%; table-layout: auto; }
-#tab-statik.aktiv { grid-template-columns: clamp(380px, 44vw, 640px) 1fr; }
-@media (max-width: 820px) { #tab-statik.aktiv { grid-template-columns: 1fr; } }
+#tab-statik.aktiv { grid-template-columns: var(--links, clamp(380px, 44vw, 640px)) 10px minmax(0, 1fr); }
+@media (max-width: 820px) { #tab-statik.aktiv { grid-template-columns: 1fr !important; } }
 #tab-statik .eingabe { overflow-x: hidden; }
 
 /* ---- Statik: Querschnittskarten ---- */
@@ -199,8 +199,8 @@ h3.unter { font-size: .95rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid v
 #tab-statik .eingabe > div[id^="sw-"] { overflow-x: auto; }   /* Notfall: sehr breite Tabellen scrollen statt abgeschnitten zu werden */
 
 /* ---- Lastermittlung ---- */
-#tab-lasten.aktiv { grid-template-columns: clamp(340px, 38vw, 520px) 1fr; }
-@media (max-width: 820px) { #tab-lasten.aktiv { grid-template-columns: 1fr; } }
+#tab-lasten.aktiv { grid-template-columns: var(--links, clamp(340px, 38vw, 520px)) 10px minmax(0, 1fr); }
+@media (max-width: 820px) { #tab-lasten.aktiv { grid-template-columns: 1fr !important; } }
 #ed-canvas { width: 100%; background: #fff; border: 1px solid #cfd6de; border-radius: 8px; touch-action: pan-y; height: 420px; }
 #tab-lasten .sw-kkopf input[type=text] { font-size: 16px; padding: 3px; min-width: 0; }
 #tab-lasten details > summary { cursor: pointer; font-size: .9rem; margin: .3rem 0; }
@@ -209,3 +209,17 @@ label.cb input { width: auto; }
 #ed-ergebnis { overflow-x: auto; }
 #tab-lasten .sw-kfelder { grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); }
 .raster label.cb, label.cb { flex-direction: row; align-items: center; }
+/* Linien-/Streifenlast-Zeilen im Erddruck */
+.ed-zeile { display: flex; flex-wrap: wrap; gap: .4rem; align-items: flex-end; }
+.ed-zeile label { flex: 1 1 5.5rem; min-width: 0; }
+
+/* Verschiebbarer Spaltentrenner */
+.spalten-trenner { align-self: stretch; min-height: 3rem; cursor: col-resize; touch-action: none; position: relative; border-radius: 4px; }
+.spalten-trenner::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: #cfd6de; border-radius: 1px; }
+.spalten-trenner:hover::after, .spalten-trenner.zieht::after { background: #1565c0; width: 3px; left: 3.5px; }
+/* Speicherplätze mit Namen */
+.knopf.slot { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; min-width: 2.4rem; }
+.knopf.slot small { font-size: .62rem; font-weight: normal; max-width: 4.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slotname-eingabe { width: 100%; margin-top: .3rem; font-size: 16px; padding: 3px 6px; }
+.slots-block { margin-bottom: .6rem; }
+.verlauf-knoepfe { display: inline-flex; gap: .3rem; }

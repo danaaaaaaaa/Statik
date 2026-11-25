@@ -272,12 +272,27 @@ const INFO = {
       "Ruhe: e<sub>0h</sub> = K<sub>0h</sub>·σ′<sub>v</sub>, K<sub>0h</sub> = (1 − sinφ′)·(1 + sinβ)",
       "passiv: e<sub>ph</sub> = K<sub>pgh</sub>·σ′<sub>v</sub> + 2·c′·√K<sub>pgh</sub>",
       "erhöht aktiv: e = 0,5·(e<sub>ah</sub> + e<sub>0h</sub>)",
-      "K<sub>agh</sub> = cos²φ′ / [1 + √(sin(φ′+δ)·sin(φ′−β)/(cosδ·cosβ))]²",
-      "K<sub>pgh</sub> = cos²φ′ / [1 − √(sin(φ′+δ)·sin(φ′+β)/(cosδ·cosβ))]²",
-      "E<sub>h</sub> = ∫ e<sub>h</sub> dz, E<sub>v</sub> = Σ E<sub>h,i</sub>·tanδ<sub>i</sub>, W = ½·γ<sub>w</sub>·h<sub>w</sub>²",
+      "K<sub>agh</sub> = cos²(φ′−α) / {cos²α·[1 + √(sin(φ′+δ)·sin(φ′−β)/(cos(α+δ)·cos(α−β)))]²}",
+      "K<sub>pgh</sub> = cos²(φ′+α) / {cos²α·[1 − √(sin(φ′+δ)·sin(φ′+β)/(cos(α−δ)·cos(α−β)))]²}",
+      "E<sub>h</sub> = ∫ e<sub>h</sub> dz, E<sub>v</sub> = Σ E<sub>h,i</sub>·tan(α+δ<sub>i</sub>) (aktiv), W = ½·γ<sub>w</sub>·h<sub>w</sub>²",
+      "Mindesterddruck: e<sub>ah</sub> ≥ K<sub>agh</sub>(φ′<sub>min</sub>, c′=0)·σ′<sub>v</sub>",
+      "Ingold: σ<sub>hc</sub> = √(2·P′·γ/π), z<sub>c</sub> = σ<sub>hc</sub>/(K<sub>a</sub>·γ), z<sub>e</sub> = σ<sub>hc</sub>/(K<sub>p</sub>·γ)",
+      "Linienlast Q: E<sub>h</sub> = Q·k<sub>q</sub>, Rechteck zwischen z = a·tanφ′ und z = a·tanϑ<sub>a</sub>",
     ],
-    text: "Lotrechte Wand, ebene Gleitfläche (Coulomb/Müller-Breslau), horizontale Komponente der Beiwerte; die Beiwerte lassen sich je Schicht überschreiben. Kohäsion wird vereinfacht über 2·c′·√K berücksichtigt; bei aktivem Druck wird der Erddruck nicht negativ. Der Faktor skaliert das Ergebnis (z. B. 0,5 für eine nur teilweise mobilisierte Größe). Die Auflast wirkt gleichmäßig auf der Geländeoberfläche. Nicht erfasst: geneigte Wand, Streifen-/Linienlasten, Mindesterddruck, Verdichtungserddruck, gekrümmte Gleitflächen beim passiven Druck, Erdbeben. Alle Werte sind charakteristisch (ohne Teilsicherheitsbeiwerte). Formeln und Grenzwerte vor Verwendung an DIN 4085 und EAB prüfen.",
+    text: "Coulomb/Müller-Breslau mit ebener Gleitfläche, horizontale Komponente der Beiwerte (Wandneigung α: + = Wandkopf vom Boden weg; Tiefen lotrecht); die Beiwerte lassen sich je Schicht überschreiben. Kohäsion über 2·c′·√K; bei aktivem Druck nie negativ. Der Faktor skaliert nur den Bodendruck. Die Auflast p wirkt gleichmäßig auf dem Gelände. Zusätze (nur aktiv/erhöht): Verdichtungserddruck nach Ingold (Rankine-Beiwerte der Schicht 1), Linien-/Streifenlasten im Gleitflächenverfahren mit φ′, δ der Schicht 1 – vereinfacht, nicht identisch mit den Verteilungen der DIN 4085; Streifenlast als Integral von Linienlasten. Reicht die Lastausbreitung unter den Wandfuß, wird nur der Anteil bis H angesetzt. Nicht erfasst: Erdbeben, aktive gekrümmte Gleitflächen. Alle Werte charakteristisch. Alle Formeln vor Verwendung an DIN 4085 und EAB prüfen – sie stammen aus der Literatur, nicht aus dem Normtext.",
     normen: ["DIN 4085 (Baugrund – Berechnung des Erddrucks)", "DIN EN 1997-1 mit NA, Anhang C", "EAB (Empfehlungen des Arbeitskreises Baugruben)"],
+  },
+  erdDelta: {
+    titel: "Wandreibungswinkel δ",
+    text: "Statt δ je Schicht einzutragen, kann δ als Anteil von φ′ gewählt werden (0, ⅓, ½, ⅔·φ′ entsprechen den Spalten der Erddruckbeiwert-Tabellen; φ′ für verzahnte Wandflächen). Welcher Anteil zur Wandbeschaffenheit (glatt, rau, verzahnt; aktiv/passiv) gehört, regelt DIN 4085 Anhang A – der Normtext lag hier nicht vor, daher die Zuordnung bitte dort prüfen. Bei gewähltem Anteil sind die δ-Felder der Schichten gesperrt.",
+  },
+  erdPassiv: {
+    titel: "Passiver Erddruck",
+    formeln: [
+      "gekrümmt (lotrechte Wand, waagerechtes Gelände): K<sub>pgh</sub> = (cosδ + √(sin²φ′ − sin²δ))/(1 − sinφ′)·e<sup>2θ·tanφ′</sup>, θ = ½·[δ + arcsin(sinδ/sinφ′)]",
+      "mobilisiert: e = e<sub>0</sub> + ρ·(e<sub>p</sub> − e<sub>0</sub>), ρ = 1 − (1 − s/s<sub>B</sub>)²",
+    ],
+    text: "Die ebene Gleitfläche überschätzt K<sub>p</sub> bei großem δ; die Log-Spirale (Näherung nach Lancellotta) liefert Werte nahe den Caquot-Kérisel-Tafeln. Bei α ≠ 0 oder β > 0 wird auf Coulomb zurückgegriffen. Die Mobilisierung ist ein einfacher Parabelansatz mit Bruchverschiebung s<sub>B</sub> als Anteil der Wandhöhe – NICHT die Originalfunktion nach Vogt (nicht verfügbar); Funktion und s<sub>B</sub> bitte mit DIN 4085/EAB abgleichen.",
   },
   erdSchicht: {
     titel: "Bodenschichten",
@@ -303,6 +318,12 @@ const INFO = {
     text: "Jede Last wird einer Einwirkung zugeordnet. Die Kategorie belegt ψ₀, ψ₁, ψ₂ nach DIN EN 1990/NA vor (z. B. Büro 0,7/0,5/0,3, Schnee bis NN+1000 m 0,5/0,2/0, Wind 0,6/0,2/0); die Werte sind änderbar. Mehrere Lasten gleicher Herkunft gehören zu derselben Einwirkung (sie wirken gemeinsam). Tabellenwerte vor Verwendung an der Norm prüfen.",
     normen: ["DIN EN 1990/NA, Tab. NA.A.1.1 (ψ-Werte)"],
   },
+  swEigengewicht: {
+    titel: "Eigengewicht der Stäbe",
+    formeln: ["g = A·γ  [kN/m] je m Stablänge, Richtung global Z (nach unten)"],
+    text: "Das Eigengewicht wird aus der Querschnittsfläche und der Wichte des Materials berechnet (Stahl 78,5, Beton 25, Brettschichtholz 4,2–4,5 kN/m³, Aluminium 27 kN/m³; bei „eigenes Material“ frei wählbar, bei Stäben mit „manuell“ über die Wichte unter den Stäben). Es wird als Streckenlast über die ganze Stablänge der ersten ständigen Einwirkung (Art G) zugeordnet und grau dargestellt. Gevoutete Stäbe: mittlere Fläche. Bettung und Lagerreaktionen bleiben unberührt. Tabellenwerte der Wichte nach EN 1991-1-1, Anhang A – bei Bedarf anpassen.",
+    normen: ["DIN EN 1991-1-1 mit NA, Anhang A (Wichten)"],
+  },
   swTsb: {
     titel: "Teilsicherheitsbeiwerte und Kombinationen",
     formeln: [
@@ -314,6 +335,17 @@ const INFO = {
     ],
     text: "Vorbelegung STR/GEO: γ<sub>G,sup</sub> = 1,35, γ<sub>G,inf</sub> = 1,00, γ<sub>Q</sub> = 1,50 (günstig: 0); EQU: 1,10/0,90/1,50. Es werden alle Möglichkeiten gebildet (jede veränderliche Einwirkung als Leiteinwirkung, jede ständige ungünstig oder günstig, veränderliche vorhanden oder nicht) und daraus die Umhüllende. Bei mehr als drei ständigen Einwirkungen wirken sie gemeinsam ungünstig bzw. günstig. Nicht erfasst: Erdbeben, 6.10a/b, Ermüdung. Ergebnisse der Umhüllenden sind nicht gleichzeitig wirkende Extremwerte; einzelne Kombinationen sind wählbar.",
     normen: ["DIN EN 1990 mit NA, Abschnitte 6.4.3 und Anhang A", "DIN EN 1990/NA, Tab. NA.A.1.2(A) und (B)"],
+  },
+  schweissnaht: {
+    titel: "Schweißnahtnachweis (Kehlnaht, Stumpfnaht)",
+    formeln: [
+      "σ<sub>⊥</sub> = τ<sub>⊥</sub> = (|F<sub>n</sub>| + |F<sub>q</sub>|)/(√2·Σ a·l), τ<sub>∥</sub> = F<sub>l</sub>/Σ a·l",
+      "√(σ<sub>⊥</sub>² + 3(τ<sub>⊥</sub>² + τ<sub>∥</sub>²)) ≤ f<sub>u</sub>/(β<sub>w</sub>·γ<sub>M2</sub>) und σ<sub>⊥</sub> ≤ f<sub>u</sub>/γ<sub>M2</sub>",
+      "vereinfacht: F<sub>w,Ed</sub> = √(F<sub>l</sub>² + F<sub>⊥</sub>²)/(n·l<sub>eff</sub>) ≤ F<sub>w,Rd</sub> = f<sub>u</sub>/(√3·β<sub>w</sub>·γ<sub>M2</sub>)·a",
+      "Stumpfnaht: √(σ² + 3τ²) ≤ f<sub>y</sub>/γ<sub>M0</sub>",
+    ],
+    text: "Doppelkehlnaht im T-Stoß mit 45°-Kehlschnitt. Die Kräfte F<sub>n</sub> (senkrecht zur Anschlussfläche) und F<sub>q</sub> (quer zur Naht in der Anschlussfläche) werden für die ungünstigere Naht betragsmäßig addiert (konservativ); F<sub>l</sub> wirkt in Nahtrichtung. Nicht erfasst: Nahtgruppen mit Biegung/Torsion (Schweißnahtgruppe aus Querschnitt), Abminderung β<sub>Lw</sub> bei langen Überlappstößen, Ermüdung, Schweißen mit Fremdwerkstoffen. β<sub>w</sub> und f<sub>u</sub> nach EN 1993-1-8, Tab. 4.1; γ<sub>M2</sub> = 1,25. Tabellenwerte und Formeln vor Verwendung an der Norm prüfen.",
+    normen: ["DIN EN 1993-1-8 mit NA, Abschnitt 4 (Schweißverbindungen)"],
   },
   torsion: {
     titel: "Torsion (St. Venant)",

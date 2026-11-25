@@ -130,3 +130,8 @@ St.-Venant-Torsion: Eingabe T [kNm] je Reiter, Kennwerte I_t/W_t (I, U, T, Hohlp
 - Erddruckarten: aktiv, erhöht aktiv (0,5·(aktiv + Ruhe)), Ruhedruck, passiv; Faktor auf das Ergebnis.
 - Ergebnis: E_h, E_v, Angriffshöhe, Wasserdruck, Tabelle je Abschnitt; Grafik mit Schichtenprofil und Erddruckverlauf, Werte beim Überfahren/Antippen.
 - Vereinfachungen: lotrechte Wand, Coulomb mit ebener Gleitfläche, Kohäsion über 2·c·√K, keine Teilsicherheitsbeiwerte.
+
+## Version 18: Erddruck-Erweiterungen, Statik-Komfort
+- Erddruck: Wandneigung α (+ = Wandkopf vom Boden weg), Mindesterddruck (Vergleich mit φ′min, c′ = 0), Verdichtungserddruck nach Ingold, Linien- und Streifenlasten (Gleitflächenverfahren, Rechteck- bzw. Integralverteilung), δ als Anteil von φ′ (0, ⅓, ½, ⅔, 1), passiv mit gekrümmter Gleitfläche (Log-Spirale, Lancellotta) und mobilisiertem Erdwiderstand (Parabelansatz, NICHT die Originalfunktion nach Vogt). Beiwerte K_agh/K_pgh mit α gegen ein Keilgleichgewicht geprüft.
+- Statik: Lasten maßstäblich (Pfeillänge ∝ Last, Maßstab unten links); automatisches Eigengewicht (Wichte je Material, Einwirkung G1, grau dargestellt); 6 benennbare Speicherplätze (`slots.js`, `SlotLeiste`), auch für die Reiter im Stahlbau; Übernahme von N, V, M in Stahlbau/Massivbau; Rückgängig/Wiederherstellen (`verlauf.js`, auch im Erddruck).
+- Layout: verschiebbarer Trenner zwischen Eingabe und Ergebnissen (`trenner.js`, Doppelklick = zurücksetzen, Breite wird gemerkt).

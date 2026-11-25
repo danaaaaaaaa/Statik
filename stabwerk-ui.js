@@ -108,7 +108,7 @@ class StabwerkZeichnung {
     const extra = this._extra(erg, art, ausd, ueh);
     const xs = [nx0, nx1, ...extra.map(p => p[0])], zs = [nz0, nz1, ...extra.map(p => p[1])];
     const x0 = Math.min(...xs), z0 = Math.min(...zs);
-    const rand = 62;                                           // Platz für Lasten, Lager und Beschriftung
+    const rand = 84;                                           // Platz für Lasten (Pfeile bis 64 px), Lager und Beschriftung
     const bw = Math.max(Math.max(...xs) - x0, 0.5), bh = Math.max(Math.max(...zs) - z0, 0.5);
     const sk = Math.min((w - 2 * rand) / bw, (h - 2 * rand) / bh, 400);
     const ox = (w - (Math.max(...xs) - x0) * sk) / 2, oy = (h - (Math.max(...zs) - z0) * sk) / 2;
@@ -265,8 +265,16 @@ class StabwerkZeichnung {
     g.beginPath(); g.moveTo(x2, y2); g.lineTo(x2 - 8 * ux + 3.5 * uy, y2 - 8 * uy - 3.5 * ux); g.lineTo(x2 - 8 * ux - 3.5 * uy, y2 - 8 * uy + 3.5 * ux); g.closePath(); g.fill();
   }
 
+  /**
+   * Lasten maßstäblich: die Pfeillänge ist proportional zur Last (Streckenlasten in kN/m und Einzel-/Knotenkräfte in kN
+   * haben je einen eigenen Maßstab; größte Last = 64 px). Eigengewicht (automatisch) wird grau gezeichnet.
+   */
   _lasten(g, m, stab, P, sk) {
-    const f = "#d35400", LEN = 30;
+    const FARBE = "#d35400", EG = "#7f8c8d", MAXL = 64;
+    const ab = v => (Number.isFinite(v) ? Math.abs(v) : 0);
+    const qmax = Math.max(1e-9, ...m.strecken.map(l => ab(l.q)));
+    const fmax = Math.max(1e-9, ...m.einzel.map(l => ab(l.F)), ...m.knotenlasten.flatMap(l => [ab(l.Fx), ab(l.Fz)]));
+    const lq = q => Math.max(8, MAXL * ab(q) / qmax), lf = F => Math.max(10, MAXL * ab(F) / fmax);
     const richt = (st, r) => {            // Einheitsvektor der Lastrichtung (global, Z nach unten)
       if (r === "X") return [1, 0];
       if (r === "lokal") return [-(st.b.z - st.a.z) / st.L, (st.b.x - st.a.x) / st.L];
@@ -274,6 +282,7 @@ class StabwerkZeichnung {
     };
     for (const l of m.strecken) {
       const st = stab[l.s - 1]; if (!st || !Number.isFinite(l.q) || l.q === 0) continue;
+      const f = l.eg ? EG : FARBE, LEN = lq(l.q);
       const [dx, dz] = richt(st, l.richtung), sg = Math.sign(l.q);
       const n = Math.max(2, Math.min(10, Math.round(st.L * Math.max(0.05, Math.min(1, (Number.isFinite(l.b) ? l.b : st.L) - (l.a || 0)) / st.L) * sk / 28)));
       const pts = [], t0 = Math.max(0, Number.isFinite(l.a) ? l.a / st.L : 0), t1 = Math.min(1, Number.isFinite(l.b) ? l.b / st.L : 1);
@@ -284,22 +293,28 @@ class StabwerkZeichnung {
         this._pfeil(g, x - dx * sg * LEN, y - dz * sg * LEN, x, y, f); pts.push([x - dx * sg * LEN, y - dz * sg * LEN]);
       }
       g.strokeStyle = f; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(...p) : g.moveTo(...p)); g.stroke();
-      g.fillStyle = f; g.textAlign = "center"; g.fillText(`${l.q} kN/m${this._id(l)}`, (pts[0][0] + pts[n][0]) / 2, (pts[0][1] + pts[n][1]) / 2 - 5);
+      g.fillStyle = f; g.textAlign = "center"; g.fillText(`${fmt(l.q, 2)} kN/m${l.eg ? " (EG)" : this._id(l)}`, (pts[0][0] + pts[n][0]) / 2, (pts[0][1] + pts[n][1]) / 2 - 5);
     }
     for (const l of m.einzel) {
       const st = stab[l.s - 1]; if (!st || !Number.isFinite(l.F) || l.F === 0 || !Number.isFinite(l.a)) continue;
-      const [dx, dz] = richt(st, l.richtung), sg = Math.sign(l.F), t = Math.min(1, l.a / st.L);
+      const [dx, dz] = richt(st, l.richtung), sg = Math.sign(l.F), t = Math.min(1, l.a / st.L), LEN = lf(l.F);
       const [x, y] = P(st.a.x + (st.b.x - st.a.x) * t, st.a.z + (st.b.z - st.a.z) * t);
-      this._pfeil(g, x - dx * sg * 36, y - dz * sg * 36, x, y, f);
-      g.fillStyle = f; g.textAlign = "center"; g.fillText(`${l.F} kN${this._id(l)}`, x - dx * sg * 36, y - dz * sg * 36 - 5);
+      this._pfeil(g, x - dx * sg * LEN, y - dz * sg * LEN, x, y, FARBE);
+      g.fillStyle = FARBE; g.textAlign = "center"; g.fillText(`${l.F} kN${this._id(l)}`, x - dx * sg * LEN, y - dz * sg * LEN - 5);
     }
     for (const l of m.knotenlasten) {
       const k = m.knoten[l.k - 1]; if (!k || !Number.isFinite(k.x) || !Number.isFinite(k.z)) continue;
-      const [x, y] = P(k.x, k.z);
-      if (l.Fx) { const s = Math.sign(l.Fx); this._pfeil(g, x - s * 40, y, x, y, f); g.fillStyle = f; g.textAlign = "center"; g.fillText(`${l.Fx} kN${this._id(l)}`, x - s * 40, y - 6); }
-      if (l.Fz) { const s = Math.sign(l.Fz); this._pfeil(g, x, y - s * 40, x, y, f); g.fillStyle = f; g.textAlign = "left"; g.fillText(`${l.Fz} kN${this._id(l)}`, x + 5, y + 0 - s * 40); }
+      const [x, y] = P(k.x, k.z), f = FARBE;
+      if (l.Fx) { const s = Math.sign(l.Fx), L = lf(l.Fx); this._pfeil(g, x - s * L, y, x, y, f); g.fillStyle = f; g.textAlign = "center"; g.fillText(`${l.Fx} kN${this._id(l)}`, x - s * L, y - 6); }
+      if (l.Fz) { const s = Math.sign(l.Fz), L = lf(l.Fz); this._pfeil(g, x, y - s * L, x, y, f); g.fillStyle = f; g.textAlign = "left"; g.fillText(`${l.Fz} kN${this._id(l)}`, x + 5, y - s * L); }
       if (l.M) { g.strokeStyle = f; g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 14, l.M > 0 ? 0.3 : 2 * Math.PI - 0.3, l.M > 0 ? 4.6 : 1.7, l.M < 0); g.stroke(); g.fillStyle = f; g.textAlign = "left"; g.fillText(`${l.M} kNm${this._id(l)}`, x + 16, y + 16); }
     }
+    // Maßstab unten links: Länge eines 64-px-Pfeils
+    const hh = g.canvas.getBoundingClientRect().height;
+    g.fillStyle = "#555"; g.strokeStyle = "#555"; g.lineWidth = 1; g.textAlign = "left";
+    g.beginPath(); g.moveTo(10, hh - 14); g.lineTo(10 + MAXL, hh - 14); g.stroke();
+    const t = [m.strecken.length ? `${fmt(qmax, 2)} kN/m` : "", (m.einzel.length || m.knotenlasten.length) ? `${fmt(fmax, 2)} kN` : ""].filter(Boolean).join(" bzw. ");
+    if (t) g.fillText(`Lastmaßstab: ${MAXL} px ≙ ${t}`, 10 + MAXL + 6, hh - 10);
   }
 
   /** Schnittgrößenfläche N, V oder M (bei Umhüllenden: Maximum und Minimum); positive Werte auf der z'-Seite des Stabs. */
@@ -517,15 +532,55 @@ class StatikSeite {
     Object.entries(KOMBI_TYPEN).forEach(([k, v]) => typ.add(new Option(v, k)));
     typ.value = "gzt";
     typ.addEventListener("input", () => { document.getElementById("sw-komb-nr").value = "env"; this.aktualisiere(); });
-    ["sw-E", "sw-art", "sw-ueh", "sw-komb-nr", "sw-gGs", "sw-gGi", "sw-gQ", "sw-gA"].forEach(id => document.getElementById(id).addEventListener("input", bei));
+    ["sw-E", "sw-gam", "sw-eg", "sw-art", "sw-ueh", "sw-komb-nr", "sw-gGs", "sw-gGi", "sw-gQ", "sw-gA"].forEach(id => document.getElementById(id).addEventListener("input", bei));
     document.getElementById("sw-beispiel").addEventListener("click", () => { this.lade(StatikSeite.BEISPIEL()); this.aktualisiere(); });
     document.getElementById("sw-leer").addEventListener("click", () => { this.lade({ E: 210000, knoten: [], staebe: [], querschnitte: [QuerschnittsListe.neu()], knotenlasten: [], strecken: [], einzel: [], gruppen: [StatikSeite.neueEinwirkung("G")] }); this.aktualisiere(); });
     window.addEventListener("resize", () => { if (document.getElementById("tab-statik").classList.contains("aktiv")) this.aktualisiere(); });
 
+    // Speicherplätze (benennbar): je Platz ein vollständiges Modell
+    const anzahl = 6;
+    this.speicher = { slots: Array(anzahl).fill(null), namen: Array(anzahl).fill(""), aktiv: 0 };
     let start = null;
-    try { start = JSON.parse(localStorage.getItem("statik-modell-4")); } catch (e) { start = null; }
+    try {
+      const d = JSON.parse(localStorage.getItem("statik-slots-1") || "null");
+      if (d && Array.isArray(d.slots)) { this.speicher = { slots: d.slots.slice(0, anzahl), namen: (d.namen || []).slice(0, anzahl), aktiv: d.aktiv || 0 }; }
+      else start = JSON.parse(localStorage.getItem("statik-modell-4"));        // Übernahme des früheren Einzelspeichers
+    } catch (e) { start = null; }
+    while (this.speicher.slots.length < anzahl) this.speicher.slots.push(null);
+    while (this.speicher.namen.length < anzahl) this.speicher.namen.push("");
+    this.leiste = new SlotLeiste(document.getElementById("sw-slots"), anzahl, {
+      namen: this.speicher.namen, beiWechsel: i => this._slotWechsel(i), beiName: () => this._speichern(),
+    });
+    const gespeichert = this.speicher.slots[this.speicher.aktiv];
+    start = gespeichert || start;
     this.lade(start && start.knoten && start.gruppen ? start : StatikSeite.BEISPIEL());
+
+    // Rückgängig / Wiederherstellen
+    this.verlauf = new Verlauf({
+      holen: () => JSON.stringify(this.modell()),
+      setzen: t => { this.lade(JSON.parse(t)); this.aktualisiere(); },
+      undo: document.getElementById("sw-undo"), redo: document.getElementById("sw-redo"),
+    });
+
+    // Übernahme der Schnittgrößen in Stahlbau / Massivbau
+    ["sw-ue-stab", "sw-ue-stelle", "sw-ue-x"].forEach(id => document.getElementById(id).addEventListener("input", () => this._ueAnzeige()));
+    document.getElementById("sw-ue-sta").addEventListener("click", () => this._uebernehmen("stahlbau"));
+    document.getElementById("sw-ue-mas").addEventListener("click", () => this._uebernehmen("massivbau"));
     this.aktualisiere();
+  }
+
+  /** Aktuelles Modell im aktiven Speicherplatz ablegen und alle Plätze sichern. */
+  _speichern() {
+    const sp = this.speicher;
+    try { localStorage.setItem("statik-slots-1", JSON.stringify(sp)); } catch (e) { /* Speicher nicht verfügbar */ }
+    this.leiste.anzeige(sp.aktiv, sp.slots.map(Boolean));
+  }
+
+  /** Zu Speicherplatz i wechseln; ein leerer Platz startet als Kopie des aktuellen Systems. */
+  _slotWechsel(i) {
+    const sp = this.speicher; if (i === sp.aktiv) return;
+    const kopie = JSON.parse(JSON.stringify(sp.slots[i] || sp.slots[sp.aktiv] || this.modell()));
+    sp.aktiv = i; this.lade(kopie); this.verlauf.neu(); this.aktualisiere();
   }
 
   /** Neue Einwirkung mit Vorbelegung nach DIN EN 1990/NA. */
@@ -567,8 +622,12 @@ class StatikSeite {
   /** Stäbe mit Querschnitt: A, I, E aus Querschnitt und Material; liefert Modellkopie für die Berechnung. */
   _aufloesen(m) {
     let geaendert = false;
+    const eg = [];                                               // automatische Eigengewichtslasten
+    const gi = m.gruppen.findIndex(g => g.art === "G") + 1;      // Einwirkung für das Eigengewicht: erste ständige
+    if (m.eg && !gi) throw new Error("Eigengewicht: Es ist keine ständige Einwirkung (Art G) vorhanden.");
+    const egLast = (n, A, gam) => { if (m.eg && A > 0 && gam > 0) eg.push({ s: n + 1, q: +(A * 1e-4 * gam).toFixed(4), a: 0, b: NaN, richtung: "Z", ew: gi, eg: true }); };
     const staebe = m.staebe.map((s, n) => {
-      const q = Number(s.q) || 0; if (!q) return { ...s };
+      const q = Number(s.q) || 0; if (!q) { egLast(n, Number(s.A), m.gam); return { ...s }; }
       const k = QuerschnittsListe.kennwerte(this.qsListe.liste[q - 1] || { typ: "" });
       if (k.fehler) throw new Error(`Stab ${n + 1}, Querschnitt Q${q}: ${k.fehler}.`);
       const A = +k.A.toFixed(2), I = +k.I.toFixed(1);       // gerundete Anzeige
@@ -583,12 +642,14 @@ class StatikSeite {
         const v = QuerschnittsListe.voute(this.qsListe.liste[q - 1], q1);
         if (v.fehler) throw new Error(`Stab ${n + 1}: ${v.fehler}.`);
         s.voute = { h0: v.h0, h1: v.h1 };
+        egLast(n, (k.A + k1.A) / 2, k.gamma);                // Voute: mittlere Fläche (Trapez, Gesamtgewicht exakt)
         return { ...s, A: k.A, I: k.I, E: k.E, seg: v.seg };
       }
+      egLast(n, k.A, k.gamma);
       return { ...s, A: k.A, I: k.I, E: k.E };
     });
     if (geaendert) this.edStaebe.baue();     // angezeigte A- und I-Werte aktualisieren
-    return { ...m, staebe };
+    return { ...m, staebe, strecken: [...m.strecken, ...eg] };
   }
 
   /* ---------- Einwirkungen ---------- */
@@ -639,6 +700,7 @@ class StatikSeite {
     if (!m.gruppen || !m.gruppen.length) m.gruppen = [StatikSeite.neueEinwirkung("G")];
     [...m.knotenlasten, ...m.strecken, ...m.einzel].forEach(l => { l.ew = String(l.ew || 1); });
     document.getElementById("sw-E").value = m.E;
+    document.getElementById("sw-eg").checked = !!m.eg; document.getElementById("sw-gam").value = Number.isFinite(m.gam) ? m.gam : 78.5;
     this.qsListe.setze(m.querschnitte && m.querschnitte.length ? m.querschnitte : [QuerschnittsListe.neu()]);
     m.staebe.forEach(s => { s.q = String(s.q || 0); s.qe = String(s.qe || 0); });
     this.edEW.setze(m.gruppen);
@@ -654,7 +716,7 @@ class StatikSeite {
   modell() {
     const nr = l => ({ ...l, ew: Number(l.ew) || 1 });
     return {
-      E: zahl("sw-E"), querschnitte: this.qsListe.liste, knoten: this.edKnoten.zeilen, staebe: this.edStaebe.zeilen,
+      E: zahl("sw-E"), eg: document.getElementById("sw-eg").checked, gam: zahl("sw-gam"), querschnitte: this.qsListe.liste, knoten: this.edKnoten.zeilen, staebe: this.edStaebe.zeilen,
       federn: this.edFed.zeilen, bettung: this.edBett.zeilen, knotenlasten: this.edKL.zeilen.map(nr), strecken: this.edStr.zeilen.map(nr), einzel: this.edEin.zeilen.map(nr),
       gruppen: this.edEW.zeilen, tsb: document.getElementById("sw-nach").value,
       tsbWerte: ["sw-gGs", "sw-gGi", "sw-gQ", "sw-gA"].map(zahl),
@@ -666,7 +728,7 @@ class StatikSeite {
   /** Kombination wählen, rechnen und anzeigen. */
   aktualisiere() {
     const m = this.modell(), box = document.getElementById("sw-ergebnis"), art = document.getElementById("sw-art").value;
-    try { localStorage.setItem("statik-modell-4", JSON.stringify(m)); } catch (e) { /* Speicher nicht verfügbar */ }
+    this.speicher.slots[this.speicher.aktiv] = JSON.parse(JSON.stringify(m)); this._speichern();
     this._unbestimmtheit(m);
     this._bettung = m.bettung;
     const ids = this._ids();
@@ -702,10 +764,64 @@ class StatikSeite {
         erg = ergs[i]; info = kombis[i].name + ". ";
       }
     } catch (e) { fehler = e.message; }
-    document.getElementById("sw-hinweis").textContent = info + this.zeichnung.zeichne(m, erg, art, zahl("sw-ueh"));
+    this._erg = fehler ? null : erg;
+    this._ueStaebe(m);
+    document.getElementById("sw-hinweis").textContent = info + this.zeichnung.zeichne(fehler0 ? m : { ...m, strecken: mr.strecken }, erg, art, zahl("sw-ueh"));
     document.getElementById("sw-komb-info").innerHTML = this._ewInfo(m, ids, typ);
     box.innerHTML = fehler ? `<span class="fehler">${fehler}</span>` : (env && erg === env.max ? this._tabellenEnv(env, typ) : this._tabellen(erg, typ));
     if (!fehler && kombis.length) box.innerHTML += this._kombiListe(kombis);
+    this._ueAnzeige();
+    if (this.verlauf) this.verlauf.merke();
+  }
+
+  /* ---------- Übernahme der Schnittgrößen in die Bemessung ---------- */
+
+  /** Stabauswahl der Übernahme aktualisieren (Auswahl bleibt erhalten). */
+  _ueStaebe(m) {
+    const sel = document.getElementById("sw-ue-stab"), alt = sel.value;
+    sel.replaceChildren(...m.staebe.map((_, n) => new Option(`Stab ${n + 1}`, String(n))));
+    if ([...sel.options].some(o => o.value === alt)) sel.value = alt;
+  }
+
+  /** Maßgebende Schnittgrößen am gewählten Stab und an der gewählten Stelle (bei Umhüllenden Extremwerte). */
+  _ueWerte() {
+    const erg = this._erg; if (!erg) return null;
+    const n = Number(document.getElementById("sw-ue-stab").value), stelle = document.getElementById("sw-ue-stelle").value;
+    const saetze = (erg.min ? [erg, erg.min] : [erg]).map(E => E.staebe[n] && E.staebe[n].verlauf).filter(Boolean);
+    if (!saetze.length) return null;
+    const alle = saetze.flatMap(v => v), L = saetze[0][saetze[0].length - 1].x;
+    const wahl = (liste, f) => liste.reduce((b, p) => (f(p) > f(b) ? p : b));
+    let p;
+    if (stelle === "maxM") p = wahl(alle, q => q.M);
+    else if (stelle === "minM") p = wahl(alle, q => -q.M);
+    else if (stelle === "maxV") p = wahl(alle, q => Math.abs(q.V));
+    else {
+      const x = stelle === "anfang" ? 0 : stelle === "ende" ? L : Math.max(0, Math.min(L, zahl("sw-ue-x")));
+      const nah = alle.filter(q => Math.abs(q.x - x) < 1e-6);
+      // Stelle liegt auf einem Stützpunkt: Satz mit dem größten |M| wählen, sonst linear interpolieren
+      if (nah.length) p = wahl(nah, q => Math.abs(q.M));
+      else {
+        const v = saetze.map(vl => { let i = vl.findIndex(q => q.x >= x); i = Math.max(1, i); const a = vl[i - 1], b = vl[i], t = (x - a.x) / ((b.x - a.x) || 1); return { x, N: a.N + (b.N - a.N) * t, V: a.V + (b.V - a.V) * t, M: a.M + (b.M - a.M) * t }; });
+        p = wahl(v, q => Math.abs(q.M));
+      }
+    }
+    return { n, x: p.x, N: p.N, V: p.V, M: p.M };
+  }
+
+  _ueAnzeige() {
+    const w = this._ueWerte(), box = document.getElementById("sw-ue-werte");
+    document.getElementById("sw-ue-x").disabled = document.getElementById("sw-ue-stelle").value !== "x";
+    box.innerHTML = w ? `Stab ${w.n + 1}, x = ${fmt(w.x, 2)} m: N = <b>${fmt(w.N, 2)}</b> kN, V = <b>${fmt(w.V, 2)}</b> kN, M = <b>${fmt(w.M, 2)}</b> kNm` : "Keine Ergebnisse vorhanden.";
+    document.getElementById("sw-ue-sta").disabled = document.getElementById("sw-ue-mas").disabled = !w;
+  }
+
+  /** Werte in die Eingabefelder der Bemessung schreiben und die Seite öffnen. */
+  _uebernehmen(ziel) {
+    const w = this._ueWerte(); if (!w) return;
+    const setze = (id, v) => { const e = document.getElementById(id); e.value = String(+v.toFixed(3)); e.dispatchEvent(new Event("input", { bubbles: true })); };
+    if (ziel === "stahlbau") { setze("in-N", w.N); setze("in-Vz", w.V); setze("in-My", w.M); }
+    else { setze("sb-N", w.N); setze("sb-V", Math.abs(w.V)); setze("sb-M", w.M); }
+    location.hash = "#" + ziel;
   }
 
   /** Grad der statischen Unbestimmtheit anzeigen. */

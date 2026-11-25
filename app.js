@@ -78,21 +78,25 @@ class QuerschnittWahl {
   _initSlots() {
     this.schluessel = `statik-qs-slots-${this.box.id}`;
     this.slots = Array(QuerschnittWahl.SLOTS).fill(null);
+    this.namen = Array(QuerschnittWahl.SLOTS).fill("");
     this.aktiv = 0;
     try {
       const d = JSON.parse(localStorage.getItem(this.schluessel) || "null");
-      if (d && Array.isArray(d.slots)) { this.slots = d.slots.slice(0, QuerschnittWahl.SLOTS); this.aktiv = d.aktiv || 0; }
+      if (d && Array.isArray(d.slots)) { this.slots = d.slots.slice(0, QuerschnittWahl.SLOTS); this.aktiv = d.aktiv || 0; this.namen = (d.namen || []).slice(0, QuerschnittWahl.SLOTS); }
     } catch (e) { /* Speicher nicht verfügbar: Slots gelten nur für diese Sitzung */ }
     while (this.slots.length < QuerschnittWahl.SLOTS) this.slots.push(null);
-    this.slotBox.innerHTML = "";
-    for (let i = 0; i < QuerschnittWahl.SLOTS; i++) {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "knopf slot"; b.textContent = i + 1;
-      b.addEventListener("click", () => this.wechsle(i));
-      this.slotBox.appendChild(b);
-    }
+    while (this.namen.length < QuerschnittWahl.SLOTS) this.namen.push("");
+    // Knöpfe mit benennbaren Plätzen
+    this.leiste = new SlotLeiste(this.slotBox, QuerschnittWahl.SLOTS, {
+      namen: this.namen, beiWechsel: i => this.wechsle(i), beiName: () => { this._sichere(); if (this.beiName) this.beiName(); },
+    });
     if (this.slots[this.aktiv]) this._lade(this.slots[this.aktiv]); else this._speichere();
     this._slotAnzeige();
+  }
+
+  /** Slots samt Namen im lokalen Speicher ablegen. */
+  _sichere() {
+    try { localStorage.setItem(this.schluessel, JSON.stringify({ slots: this.slots, aktiv: this.aktiv, namen: this.namen })); } catch (e) { /* ignorieren */ }
   }
 
   /** Aktuelle Eingabe als Zustand {typ, werte}. */
@@ -119,7 +123,7 @@ class QuerschnittWahl {
   _speichere() {
     if (!this.slots) return;
     this.slots[this.aktiv] = this._zustand();
-    try { localStorage.setItem(this.schluessel, JSON.stringify({ slots: this.slots, aktiv: this.aktiv })); } catch (e) { /* ignorieren */ }
+    this._sichere();
     this._slotAnzeige();
   }
 
@@ -132,15 +136,8 @@ class QuerschnittWahl {
     this.cb();                       // speichert (ggf. Kopie) und aktualisiert alle Anzeigen
   }
 
-  /** Knöpfe: aktiv = ausgefüllt hervorgehoben, belegt = durchgezogener Rand, leer = gestrichelt. */
-  _slotAnzeige() {
-    [...this.slotBox.children].forEach((b, i) => {
-      b.classList.toggle("aktiv", i === this.aktiv);
-      b.classList.toggle("leer", !this.slots[i]);
-      const z = this.slots[i];
-      b.title = z ? `Reiter ${i + 1}: ${QUERSCHNITTE[z.typ] ? QUERSCHNITTE[z.typ].titel : z.typ}` : `Reiter ${i + 1}: leer (startet als Kopie)`;
-    });
-  }
+  /** Knöpfe: aktiv = hervorgehoben, belegt = durchgezogener Rand, leer = gestrichelt; Namen werden angezeigt. */
+  _slotAnzeige() { this.leiste.anzeige(this.aktiv, this.slots.map(Boolean)); }
 
   get klasse() { return QUERSCHNITTE[this.sel.value]; }
 
@@ -626,6 +623,7 @@ class StahlbauSeite {
     // Schnittgrößen gehören zum Reiter: Änderung wird im aktiven Reiter gespeichert
     for (const id of SchnittgroessenIds) document.getElementById(id).addEventListener("input", () => this.wahl.cb());
     // Schnittgrößen aus einem anderen Reiter in den aktuellen Reiter kopieren (sechs Knöpfe wie bei den Reitern)
+    this.wahl.beiName = () => this._quellReiter();
     const quelle = document.getElementById("sg-quelle");
     for (let i = 0; i < QuerschnittWahl.SLOTS; i++) {
       const b = document.createElement("button");
@@ -636,6 +634,7 @@ class StahlbauSeite {
       });
       quelle.appendChild(b);
     }
+    this.schweiss = new SchweissnahtSeite();           // nach dem Füllen der Stahlgüteliste
     this.aktualisiere();
   }
 
@@ -678,7 +677,10 @@ class StahlbauSeite {
     [...document.getElementById("sg-quelle").children].forEach((b, i) => {
       const z = w.slots && w.slots[i];
       b.disabled = !(z && z.zusatz) || i === w.aktiv;
-      b.title = i === w.aktiv ? "aktueller Reiter" : z && z.zusatz ? `Schnittgrößen aus Reiter ${i + 1} übernehmen` : `Reiter ${i + 1} ist leer`;
+      const nm = w.leiste.name(i), kurz = (w.namen[i] || "").trim();
+      b.replaceChildren(Object.assign(document.createElement("b"), { textContent: String(i + 1) }));
+      if (kurz) b.appendChild(Object.assign(document.createElement("small"), { textContent: kurz.length > 9 ? kurz.slice(0, 8) + "…" : kurz }));
+      b.title = i === w.aktiv ? "aktueller Reiter" : z && z.zusatz ? `Schnittgrößen aus „${nm}“ übernehmen` : `„${nm}“ ist leer`;
     });
   }
 
@@ -1261,6 +1263,8 @@ class App {
     this.massivbau = new StahlbetonSeite();
     this.lasten = new ErddruckSeite();
     this.info = new InfoPanel();
+    // verschiebbare Spaltentrenner zwischen Eingabe und Ergebnissen
+    document.querySelectorAll("section.seite").forEach(sec => new Spaltentrenner(sec));
     // Navigation über die Adresse (#start, #stahlbau, #massivbau): funktioniert mit Zurück-Taste
     window.addEventListener("hashchange", () => this.ausAdresse());
     this.ausAdresse();
