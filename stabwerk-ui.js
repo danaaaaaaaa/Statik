@@ -158,6 +158,7 @@ class StabwerkZeichnung {
       g.fillStyle = "#c0392b"; g.textAlign = "left"; g.fillText(n + 1, x + 6, y - 6);
     });
     this._achsen(g, w, h);
+    this._bettungsText(g, w, h);
     if (this.maus && this.treffer.length) this._tooltip(g, w, h);
     return text;
   }
@@ -239,6 +240,8 @@ class StabwerkZeichnung {
 
   /** Federn an Knoten (c_x nach links, c_z nach unten) und Bettung der Stäbe (Federreihe auf der z'-Seite bzw. nach unten). */
   _federn(g, m, stab, P) {
+    const font0 = g.font;
+    this._bl = [];                                                 // Bettungsbeschriftungen (werden zuletzt gezeichnet)
     g.strokeStyle = "#00897b"; g.lineWidth = 1.5; g.fillStyle = "#00897b"; g.font = "10px system-ui, sans-serif";
     for (const f of m.federn || []) {
       const k = m.knoten[f.k - 1]; if (!k || !Number.isFinite(k.x) || !Number.isFinite(k.z)) continue;
@@ -246,14 +249,53 @@ class StabwerkZeichnung {
       if (f.cz > 0) { this._feder(g, x, y + 4, x, y + 34); g.textAlign = "left"; g.fillText(`c_z ${f.cz}`, x + 8, y + 36); }
       if (f.cx > 0) { this._feder(g, x - 4, y, x - 34, y); g.textAlign = "right"; g.fillText(`c_x ${f.cx}`, x - 36, y - 6); }
     }
+    // Bettung: Federreihe je Eintrag, aber nur EINE Beschriftung je Stab (Platzierung später, siehe _bettungsText)
+    const beschriftet = new Set();
     for (const b of m.bettung || []) {
       const st = stab[b.s - 1]; if (!st || !(b.kz > 0 || b.kx > 0)) continue;
       const [x1, y1] = P(st.a.x, st.a.z), [x2, y2] = P(st.b.x, st.b.z), lp = Math.hypot(x2 - x1, y2 - y1) || 1;
       const dx = b.bezug === "global" ? 0 : -(y2 - y1) / lp, dz = b.bezug === "global" ? 1 : (x2 - x1) / lp;
+      g.strokeStyle = "#00897b"; g.lineWidth = 1.5;
       const n = Math.max(3, Math.min(14, Math.round(lp / 26)));
       for (let i = 0; i <= n; i++) { const t = i / n, x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t; this._feder(g, x + dx * 4, y + dz * 4, x + dx * 22, y + dz * 22); }
-      g.textAlign = "center"; g.fillText(`Bettung k_z ${b.kz}${b.kx > 0 ? `, k_x ${b.kx}` : ""} kN/m²`, (x1 + x2) / 2 + dx * 34, (y1 + y2) / 2 + dz * 34);
+      if (beschriftet.has(b.s)) continue;                          // weitere Bettungseinträge desselben Stabes: keine zweite Beschriftung
+      beschriftet.add(b.s);
+      this._bl.push({ t: `Bettung k_z ${b.kz}${b.kx > 0 ? `, k_x ${b.kx}` : ""} kN/m²`, x1, y1, x2, y2, dx, dz });
     }
+    g.font = font0; g.textBaseline = "alphabetic";
+  }
+
+  /**
+   * Bettungsbeschriftungen zuletzt zeichnen: je gebettetem Stab eine Beschriftung an der Stelle, die am wenigsten
+   * schon Gezeichnetes überdeckt (Pixelprüfung auf der fertigen Zeichnung), mit weißem Rand für die Lesbarkeit.
+   */
+  _bettungsText(g, w, h) {
+    if (!this._bl || !this._bl.length) return;
+    const dpr = window.devicePixelRatio || 1, cv = g.canvas;
+    g.font = "11px system-ui, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+    const tinte = (x0, y0, x1, y1) => {                              // Anzahl belegter Pixel im Rechteck (Gerätepixel)
+      const X = Math.max(0, Math.floor(x0 * dpr)), Y = Math.max(0, Math.floor(y0 * dpr));
+      const W = Math.min(cv.width - X, Math.ceil((x1 - x0) * dpr)), H = Math.min(cv.height - Y, Math.ceil((y1 - y0) * dpr));
+      if (W <= 0 || H <= 0) return 1e6;
+      const d = g.getImageData(X, Y, W, H).data; let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 20) n++;
+      return n;
+    };
+    const belegt = [];
+    for (const L of this._bl) {
+      const hw = g.measureText(L.t).width / 2 + 3; let best = null;
+      for (const seite of [1, -1]) for (const f of [0.5, 0.35, 0.65, 0.2, 0.8]) for (let d = 30; d <= 110; d += 12) {
+        const x = Math.max(hw + 2, Math.min(w - hw - 2, L.x1 + (L.x2 - L.x1) * f + seite * L.dx * d)), y = Math.max(9, Math.min(h - 9, L.y1 + (L.y2 - L.y1) * f + seite * L.dz * d));
+        const r = [x - hw, y - 8, x + hw, y + 8];
+        const kollidiert = belegt.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]);
+        const wert = tinte(...r) * 1000 + (kollidiert ? 1e9 : 0) + d + Math.abs(f - 0.5) * 60 + (seite < 0 ? 300 : 0);
+        if (!best || wert < best.wert) best = { wert, x, y, r };
+      }
+      belegt.push(best.r);
+      g.lineJoin = "round"; g.lineWidth = 4; g.strokeStyle = "rgba(255,255,255,.95)"; g.strokeText(L.t, best.x, best.y);
+      g.fillStyle = "#00695c"; g.fillText(L.t, best.x, best.y);
+    }
+    g.textBaseline = "alphabetic";
   }
 
   /** Pfeil von (x1,y1) nach (x2,y2) */

@@ -269,8 +269,13 @@ class ErddruckSeite {
     ["ed-art", "ed-faktor", "ed-beta", "ed-alpha", "ed-p", "ed-gw", "ed-wasser", "ed-phimin", "ed-verd", "ed-delta", "ed-gleit", "ed-mobs", "ed-mobsb"].forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
     document.getElementById("ed-beispiel").addEventListener("click", () => { this.lade(ErddruckSeite.BEISPIEL()); this.aktualisiere(); });
     window.addEventListener("resize", () => { if (document.getElementById("tab-lasten").classList.contains("aktiv")) this.aktualisiere(); });
-    let start = null;
-    try { start = JSON.parse(localStorage.getItem("lasten-erddruck-1")); } catch (e) { start = null; }
+    // Speicherplätze (benennbar); der frühere Einzelspeicher wird als Startwert übernommen
+    this.speicher = new ModellSpeicher(document.getElementById("ed-slots"), "lasten-erddruck-slots-1", 6, {
+      holen: () => this.modell(),
+      setzen: m => { this.lade(m); if (this.verlauf) this.verlauf.neu(); this.aktualisiere(); },
+    });
+    let start = this.speicher.start();
+    try { if (!start) start = JSON.parse(localStorage.getItem("lasten-erddruck-1")); } catch (e) { start = null; }
     this.lade(start && start.schichten && start.schichten.length ? start : ErddruckSeite.BEISPIEL());
     // Rückgängig / Wiederherstellen
     this.verlauf = new Verlauf({
@@ -324,7 +329,7 @@ class ErddruckSeite {
 
   aktualisiere() {
     const m = this.modell(), box = document.getElementById("ed-ergebnis");
-    try { localStorage.setItem("lasten-erddruck-1", JSON.stringify(m)); } catch (e) { /* Speicher nicht verfügbar */ }
+    if (this.speicher) this.speicher.sichern();
     const rechner = new Erddruck(m), erg = rechner.berechne();
     if (!erg.fehler) this.schichten.zeigeAuto(erg.K, m.deltaAnteil);
     this.zeichnung.zeichne(m, erg);

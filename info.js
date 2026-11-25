@@ -340,7 +340,7 @@ const INFO = {
     titel: "Schweißnahtnachweis (Kehlnaht, Stumpfnaht)",
     formeln: [
       "σ<sub>⊥</sub> = τ<sub>⊥</sub> = (|F<sub>n</sub>| + |F<sub>q</sub>|)/(√2·Σ a·l), τ<sub>∥</sub> = F<sub>l</sub>/Σ a·l",
-      "√(σ<sub>⊥</sub>² + 3(τ<sub>⊥</sub>² + τ<sub>∥</sub>²)) ≤ f<sub>u</sub>/(β<sub>w</sub>·γ<sub>M2</sub>) und σ<sub>⊥</sub> ≤ f<sub>u</sub>/γ<sub>M2</sub>",
+      "√(σ<sub>⊥</sub>² + 3(τ<sub>⊥</sub>² + τ<sub>∥</sub>²)) ≤ f<sub>u</sub>/(β<sub>w</sub>·γ<sub>M2</sub>) und σ<sub>⊥</sub> ≤ 0,9·f<sub>u</sub>/γ<sub>M2</sub>",
       "vereinfacht: F<sub>w,Ed</sub> = √(F<sub>l</sub>² + F<sub>⊥</sub>²)/(n·l<sub>eff</sub>) ≤ F<sub>w,Rd</sub> = f<sub>u</sub>/(√3·β<sub>w</sub>·γ<sub>M2</sub>)·a",
       "Stumpfnaht: √(σ² + 3τ²) ≤ f<sub>y</sub>/γ<sub>M0</sub>",
     ],

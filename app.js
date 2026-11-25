@@ -958,6 +958,13 @@ class StahlbetonSeite {
       "sb-V", "sb-m", "sb-cot", "sb-sw", "sb-nutz", "sb-bauteil", "sb-ds", "sb-dsd", "sb-dsw", "sb-nl", "sb-dg", "sb-dev", "sb-dmodus", "sb-v-art", "sb-v-d", "sb-v-form", "sb-v-vb", "sb-v-ausn", "sb-v-cd", "sb-v-ast", "sb-v-K", "sb-v-p", "sb-v-rho",
       ...Object.keys(Expositionsklassen.GRUPPEN).map(g => "sb-x-" + g)];
     ids.forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
+    // benennbare Speicherplätze: Zustand = Werte aller Eingabefelder
+    this.speicher = new ModellSpeicher(document.getElementById("sb-slots"), "massivbau-slots-1", 6, {
+      holen: () => Object.fromEntries(ids.map(id => [id, document.getElementById(id).value])),
+      setzen: z => { for (const id of ids) { const e = document.getElementById(id); if (id in z) e.value = z[id]; } this.aktualisiere(); },
+    });
+    const z0 = this.speicher.start();
+    if (z0) for (const id of ids) { const e = document.getElementById(id); if (id in z0) e.value = z0[id]; }
     // Betonklasse aus dem Ergebnis übernehmen
     document.getElementById("sb-ergebnis").addEventListener("click", e => {
       const k = e.target.closest(".set-beton");
@@ -981,6 +988,7 @@ class StahlbetonSeite {
 
   aktualisiere() {
     const val = id => document.getElementById(id).value;
+    if (this.speicher) this.speicher.sichern();
     const typ = val("sb-typ"), platte = val("sb-bauteil") === "platte", auto = val("sb-dmodus") === "auto";
     document.querySelectorAll(".nur-pb").forEach(el => el.classList.toggle("versteckt", typ !== "plattenbalken"));
     document.querySelectorAll(".nur-balken").forEach(el => el.classList.toggle("versteckt", platte));

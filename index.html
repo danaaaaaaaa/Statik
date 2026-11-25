@@ -84,6 +84,7 @@
         <div id="ed-streifen"></div>
         <h2>Bodenschichten (von oben nach unten) <button type="button" class="info" data-info="erdSchicht">i</button></h2>
         <div id="ed-schichten"></div>
+        <div class="slots-block"><span class="slotname">Speicherplätze (benennbar)</span><div id="ed-slots"></div></div>
         <div class="sw-knopfzeile"><button type="button" id="ed-undo" disabled>↶ Rückgängig</button><button type="button" id="ed-redo" disabled>↷ Wiederherstellen</button>
           <button type="button" id="ed-beispiel">Beispiel laden</button></div>
         <p class="hinweis">Die Wand reicht bis zur Unterkante der untersten Schicht. Beiwerte werden je Schicht aus φ′, δ und β berechnet; ein eingetragener Wert (unter „Erddruckbeiwerte“) ersetzt den berechneten.</p>
@@ -202,6 +203,8 @@
             <h2>Tragfähigkeit</h2>
             <div id="tf-ergebnis" class="ergebnis"></div>
             <h2>Schweißnahtnachweis <button type="button" class="info" data-info="schweissnaht">i</button></h2>
+            <canvas id="sn-skizze" style="height:250px"></canvas>
+            <p class="hinweis">Blau: senkrecht zur Anschlussfläche, grün: quer zur Naht (in der Anschlussfläche), rot: parallel zur Naht. Rechts die Nahtspannungen im Kehlschnitt (σ⊥, τ⊥ in der Zeichenebene, τ∥ aus der Ebene heraus). Grau gestrichelt: Kraft = 0.</p>
             <div id="sn-ergebnis" class="ergebnis"></div>
           </div>
         </div>
@@ -274,6 +277,7 @@
     <!-- ===== Massivbau: Stahlbeton-Biegebemessung ===== -->
     <section id="tab-stahlbeton" class="seite">
       <div class="eingabe">
+        <div class="slots-block"><span class="slotname">Speicherplätze (benennbar)</span><div id="sb-slots"></div></div>
         <h2>Querschnitt</h2>
         <label><span>Form</span>
           <select id="sb-typ">
