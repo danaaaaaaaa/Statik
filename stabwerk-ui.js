@@ -48,9 +48,10 @@ class ZeilenEditor {
         } else if (sp.text) {
           e = document.createElement("input"); e.type = "text"; e.value = z[sp.k] || ""; e.className = "sw-text";
         } else {
-          e = document.createElement("input"); e.type = "number"; e.step = "any";
+          e = document.createElement("input"); e.type = "number"; e.step = "any"; if (sp.platz) e.placeholder = sp.platz;   // leer = Platzhalter
           e.value = Number.isFinite(z[sp.k]) ? z[sp.k] : "";
         }
+        if (sp.sperre && sp.sperre(z)) e.disabled = true;   // berechnete Werte nicht editierbar
         e.addEventListener("input", () => {
           z[sp.k] = sp.opt || sp.text ? e.value : parseFloat(e.value);
           if (this.optionen.feld) this.optionen.feld(z, sp.k);
@@ -76,7 +77,17 @@ class ZeilenEditor {
 
 /** Zeichnung des Systems mit Lasten und wahlweise Schnittgrößen- oder Verformungsbild. */
 class StabwerkZeichnung {
-  constructor(canvas) { this.cv = canvas; }
+  constructor(canvas) {
+    this.cv = canvas; this.treffer = []; this.maus = null; this.letzte = null;
+    // Mausabfrage: beim Überfahren (bzw. Antippen) der Zustandslinien die Werte anzeigen
+    const pos = e => { const r = canvas.getBoundingClientRect(); this.maus = { x: e.clientX - r.left, y: e.clientY - r.top }; this.neu(); };
+    canvas.addEventListener("pointermove", pos);
+    canvas.addEventListener("pointerdown", pos);
+    canvas.addEventListener("pointerleave", () => { this.maus = null; this.neu(); });
+  }
+
+  /** Letzte Zeichnung wiederholen (Mausanzeige aktualisieren). */
+  neu() { if (this.letzte) this.zeichne(...this.letzte); }
 
   /**
    * @param {Object} m Modell (knoten, staebe, Lasten)
@@ -86,6 +97,7 @@ class StabwerkZeichnung {
    * @returns {string} Hinweistext (Maßstab)
    */
   zeichne(m, erg, art, ueh) {
+    this.letzte = [m, erg, art, ueh]; this.treffer = [];
     const { g, w, h } = canvasVorbereiten(this.cv);
     const kn = m.knoten.filter(k => Number.isFinite(k.x) && Number.isFinite(k.z));
     if (!w || !h || kn.length === 0) return "";
@@ -100,6 +112,7 @@ class StabwerkZeichnung {
     const bw = Math.max(Math.max(...xs) - x0, 0.5), bh = Math.max(Math.max(...zs) - z0, 0.5);
     const sk = Math.min((w - 2 * rand) / bw, (h - 2 * rand) / bh, 400);
     const ox = (w - (Math.max(...xs) - x0) * sk) / 2, oy = (h - (Math.max(...zs) - z0) * sk) / 2;
+    this.sk = sk;
     const P = (x, z) => [ox + (x - x0) * sk, oy + (z - z0) * sk];
     const stab = m.staebe.map(s => {
       const a = m.knoten[s.i - 1], b = m.knoten[s.j - 1];
@@ -113,6 +126,13 @@ class StabwerkZeichnung {
       const [x1, y1] = P(s.a.x, s.a.z), [x2, y2] = P(s.b.x, s.b.z);
       g.strokeStyle = art === "verf" ? "#bbb" : "#222"; g.lineWidth = art === "verf" ? 1.5 : 3;
       g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+      const vt = m.staebe[n].voute;                          // Voute: Breite der Darstellung ~ Querschnittshöhe
+      if (vt) {
+        const lp = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / lp, ny = (x2 - x1) / lp, hm = Math.max(vt.h0, vt.h1);
+        const b0 = 3 + 9 * vt.h0 / hm, b1 = 3 + 9 * vt.h1 / hm;
+        g.fillStyle = art === "verf" ? "#e6e6e6" : "#9aa5b1"; g.strokeStyle = "#555"; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(x1 + nx * b0, y1 + ny * b0); g.lineTo(x2 + nx * b1, y2 + ny * b1); g.lineTo(x2 - nx * b1, y2 - ny * b1); g.lineTo(x1 - nx * b0, y1 - ny * b0); g.closePath(); g.fill(); g.stroke();
+      }
       if (art === "system") { g.fillStyle = "#1f4e9a"; g.textAlign = "center"; g.fillText(`S${n + 1}`, (x1 + x2) / 2 + 10 * (y1 - y2) / (Math.hypot(x2 - x1, y2 - y1) || 1) * -1, (y1 + y2) / 2 + 14 * ((x2 - x1) / (Math.hypot(x2 - x1, y2 - y1) || 1))); }
       // Gelenke
       const ges = m.staebe[n].gel;
@@ -122,6 +142,7 @@ class StabwerkZeichnung {
       if (ges === "ende" || ges === "beide") kreis(x2 - ex, y2 - ey);
     });
     this._lager(g, m, P);
+    this._federn(g, m, stab, P);
     this._lasten(g, m, stab, P, sk);
 
     let text = "";
@@ -137,6 +158,7 @@ class StabwerkZeichnung {
       g.fillStyle = "#c0392b"; g.textAlign = "left"; g.fillText(n + 1, x + 6, y - 6);
     });
     this._achsen(g, w, h);
+    if (this.maus && this.treffer.length) this._tooltip(g, w, h);
     return text;
   }
 
@@ -201,6 +223,39 @@ class StabwerkZeichnung {
     }
   }
 
+  /** Zickzack-Feder von (x1,y1) nach (x2,y2) mit Fußstrich am Ende. */
+  _feder(g, x1, y1, x2, y2) {
+    const l = Math.hypot(x2 - x1, y2 - y1); if (l < 4) return;
+    const ux = (x2 - x1) / l, uy = (y2 - y1) / l, nx = -uy, ny = ux, z = 4, br = 4;
+    g.beginPath(); g.moveTo(x1, y1);
+    g.lineTo(x1 + ux * l * 0.2, y1 + uy * l * 0.2);
+    for (let i = 0; i < z; i++) {
+      const t = 0.2 + 0.6 * (i + 0.5) / z, s = i % 2 ? -br : br;
+      g.lineTo(x1 + ux * l * t + nx * s, y1 + uy * l * t + ny * s);
+    }
+    g.lineTo(x1 + ux * l * 0.8, y1 + uy * l * 0.8); g.lineTo(x2, y2); g.stroke();
+    g.beginPath(); g.moveTo(x2 + nx * 7, y2 + ny * 7); g.lineTo(x2 - nx * 7, y2 - ny * 7); g.stroke();
+  }
+
+  /** Federn an Knoten (c_x nach links, c_z nach unten) und Bettung der Stäbe (Federreihe auf der z'-Seite bzw. nach unten). */
+  _federn(g, m, stab, P) {
+    g.strokeStyle = "#00897b"; g.lineWidth = 1.5; g.fillStyle = "#00897b"; g.font = "10px system-ui, sans-serif";
+    for (const f of m.federn || []) {
+      const k = m.knoten[f.k - 1]; if (!k || !Number.isFinite(k.x) || !Number.isFinite(k.z)) continue;
+      const [x, y] = P(k.x, k.z);
+      if (f.cz > 0) { this._feder(g, x, y + 4, x, y + 34); g.textAlign = "left"; g.fillText(`c_z ${f.cz}`, x + 8, y + 36); }
+      if (f.cx > 0) { this._feder(g, x - 4, y, x - 34, y); g.textAlign = "right"; g.fillText(`c_x ${f.cx}`, x - 36, y - 6); }
+    }
+    for (const b of m.bettung || []) {
+      const st = stab[b.s - 1]; if (!st || !(b.kz > 0 || b.kx > 0)) continue;
+      const [x1, y1] = P(st.a.x, st.a.z), [x2, y2] = P(st.b.x, st.b.z), lp = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const dx = b.bezug === "global" ? 0 : -(y2 - y1) / lp, dz = b.bezug === "global" ? 1 : (x2 - x1) / lp;
+      const n = Math.max(3, Math.min(14, Math.round(lp / 26)));
+      for (let i = 0; i <= n; i++) { const t = i / n, x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t; this._feder(g, x + dx * 4, y + dz * 4, x + dx * 22, y + dz * 22); }
+      g.textAlign = "center"; g.fillText(`Bettung k_z ${b.kz}${b.kx > 0 ? `, k_x ${b.kx}` : ""} kN/m²`, (x1 + x2) / 2 + dx * 34, (y1 + y2) / 2 + dz * 34);
+    }
+  }
+
   /** Pfeil von (x1,y1) nach (x2,y2) */
   _pfeil(g, x1, y1, x2, y2, f) {
     const l = Math.hypot(x2 - x1, y2 - y1); if (l < 1) return;
@@ -220,10 +275,12 @@ class StabwerkZeichnung {
     for (const l of m.strecken) {
       const st = stab[l.s - 1]; if (!st || !Number.isFinite(l.q) || l.q === 0) continue;
       const [dx, dz] = richt(st, l.richtung), sg = Math.sign(l.q);
-      const n = Math.max(3, Math.min(10, Math.round(st.L * sk / 28)));
-      const pts = [];
+      const n = Math.max(2, Math.min(10, Math.round(st.L * Math.max(0.05, Math.min(1, (Number.isFinite(l.b) ? l.b : st.L) - (l.a || 0)) / st.L) * sk / 28)));
+      const pts = [], t0 = Math.max(0, Number.isFinite(l.a) ? l.a / st.L : 0), t1 = Math.min(1, Number.isFinite(l.b) ? l.b / st.L : 1);
+      if (!(t1 > t0)) continue;
       for (let i = 0; i <= n; i++) {
-        const [x, y] = P(st.a.x + (st.b.x - st.a.x) * i / n, st.a.z + (st.b.z - st.a.z) * i / n);
+        const t = t0 + (t1 - t0) * i / n;
+        const [x, y] = P(st.a.x + (st.b.x - st.a.x) * t, st.a.z + (st.b.z - st.a.z) * t);
         this._pfeil(g, x - dx * sg * LEN, y - dz * sg * LEN, x, y, f); pts.push([x - dx * sg * LEN, y - dz * sg * LEN]);
       }
       g.strokeStyle = f; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(...p) : g.moveTo(...p)); g.stroke();
@@ -247,61 +304,164 @@ class StabwerkZeichnung {
 
   /** Schnittgrößenfläche N, V oder M (bei Umhüllenden: Maximum und Minimum); positive Werte auf der z'-Seite des Stabs. */
   _diagramm(g, erg, art, P) {
-    const sets = erg.min ? [erg, erg.min] : [erg];
+    const env = !!erg.min, sets = env ? [erg, erg.min] : [erg];
     let mx = 0;
     sets.forEach(E => E.staebe.forEach(s => s.verlauf.forEach(p => { mx = Math.max(mx, Math.abs(p[art])); })));
     if (mx < 1e-9) return `Alle ${art}-Werte sind null.`;
     const einheit = art === "M" ? "kNm" : "kN";
     const farbe = { N: "#2e7d32", V: "#1565c0", M: "#c0392b" }[art];
-    sets.forEach(E => this._flaeche(g, E, art, P, farbe));
-    return `${art} in ${einheit}; größter Betrag ${fmt(mx, 1)} ${einheit}${erg.min ? " (Umhüllende: Maximum und Minimum)" : ""}. Positive Werte liegen auf der z'-Seite des Stabs (bei waagerechten Stäben unten)${art === "M" ? "; M ist auf der Zugseite aufgetragen" : ""}.`;
+    this._einheit = einheit; this._mx = mx;
+    const marken = [];
+    // Bei Umhüllenden: Maximalwerte aus der Max-Linie, Minimalwerte aus der Min-Linie
+    sets.forEach((E, i) => marken.push(...this._flaeche(g, E, art, P, farbe, env ? (i === 0 ? "max" : "min") : "beide", env ? (i === 0 ? "max" : "min") : "")));
+    // globales Maximum und Minimum über das ganze System
+    const gmax = marken.reduce((a, m) => (m.w > a.w ? m : a), marken[0]);
+    const gmin = marken.reduce((a, m) => (m.w < a.w ? m : a), marken[0]);
+    this._beschrifte(g, marken, [gmax, gmin]);
+    const ort = m => `Stab ${m.stab}, x = ${fmt(m.x, 2)} m`, z = v => fmt(Math.abs(v) < 5e-7 ? 0 : v, 1);
+    return `${art} in ${einheit}${env ? " (Umhüllende)" : ""}: Maximum ${z(gmax.w)} (${ort(gmax)}), Minimum ${z(gmin.w)} (${ort(gmin)}). Positive Werte liegen auf der z'-Seite des Stabs (bei waagerechten Stäben unten)${art === "M" ? "; M ist auf der Zugseite aufgetragen" : ""}. Mit der Maus über die Linie fahren zeigt die Werte.`;
   }
 
-  /** Eine gefüllte Schnittgrößenfläche über allen Stäben samt Beschriftung. */
-  _flaeche(g, erg, art, P, farbe) {
+  /**
+   * Eine gefüllte Schnittgrößenfläche über allen Stäben. Liefert die Extremstellen (Stabenden und lokale
+   * Maxima/Minima im Stabinneren, per Parabel verfeinert) und registriert die Fläche für die Mausabfrage.
+   * @param {string} modus 'max' | 'min' | 'beide': welche lokalen Extrema gesucht werden
+   * @param {string} name Bezeichnung des Satzes für die Anzeige (z. B. "Maximum")
+   */
+  _flaeche(g, erg, art, P, farbe, modus, name) {
+    const marken = [], sk = this.sk, kd = this.kd;
+    const eps = 0.005 * this._mx;                                // Mindest-Ausprägung eines lokalen Extremums
     for (const s of erg.staebe) {
-      const e = s.el, nx = -e.s, nz = e.c;                       // Normale z'
-      const k0 = this._knoten[e.i];
+      const e = s.el, nx = -e.s, nz = e.c, k0 = this._knoten[e.i];
       const pos = s.verlauf.map(p => {
-        const [bx, by] = P(k0.x + e.c * p.x, k0.z + e.s * p.x), [tx, ty] = P(k0.x + e.c * p.x + nx * p[art] * this.kd, k0.z + e.s * p.x + nz * p[art] * this.kd);
-        return { bx, by, tx, ty, w: p[art] };
+        const [bx, by] = P(k0.x + e.c * p.x, k0.z + e.s * p.x), [tx, ty] = P(k0.x + e.c * p.x + nx * p[art] * kd, k0.z + e.s * p.x + nz * p[art] * kd);
+        return { bx, by, tx, ty, w: p[art], x: p.x };
       });
       g.fillStyle = farbe + "33"; g.strokeStyle = farbe; g.lineWidth = 1.5;
       g.beginPath(); pos.forEach((p, i) => i ? g.lineTo(p.bx, p.by) : g.moveTo(p.bx, p.by));
       for (let i = pos.length - 1; i >= 0; i--) g.lineTo(pos[i].tx, pos[i].ty);
       g.closePath(); g.fill();
       g.beginPath(); pos.forEach((p, i) => i ? g.lineTo(p.tx, p.ty) : g.moveTo(p.tx, p.ty)); g.stroke();
-      // Beschriftung: Anfang, Ende, Extremwert
-      const marks = [pos[0], pos[pos.length - 1]];
-      let ext = pos[0]; pos.forEach(p => { if (Math.abs(p.w) > Math.abs(ext.w)) ext = p; });
-      marks.push(ext);
-      g.fillStyle = "#111"; g.textAlign = "center";
-      const gesehen = [];
-      for (const p of marks) {
-        if (Math.abs(p.w) < 1e-6 || gesehen.some(q => Math.hypot(q[0] - p.tx, q[1] - p.ty) < 28)) continue;
-        gesehen.push([p.tx, p.ty]);
-        g.fillText(fmt(p.w, 1), p.tx + nx * 10 * Math.sign(p.w || 1), p.ty + nz * 10 * Math.sign(p.w || 1) + 4);
+
+      // Extremstellen: Stabanfang, Stabende, lokale Extrema im Inneren
+      const punkt = (x, w) => {
+        const [bx, by] = P(k0.x + e.c * x, k0.z + e.s * x), [tx, ty] = P(k0.x + e.c * x + nx * w * kd, k0.z + e.s * x + nz * w * kd);
+        return { bx, by, tx, ty, w, x, stab: s.nr, nx, nz };
+      };
+      const n = pos.length;
+      marken.push(punkt(pos[0].x, pos[0].w), punkt(pos[n - 1].x, pos[n - 1].w));
+      for (let i = 1; i < n - 1; i++) {
+        const a = pos[i - 1].w, b = pos[i].w, c = pos[i + 1].w;
+        const istMax = modus !== "min" && b > a && b >= c && b - Math.min(a, c) > 0 && b - Math.min(pos[0].w, pos[n - 1].w) > eps;
+        const istMin = modus !== "max" && b < a && b <= c && Math.max(pos[0].w, pos[n - 1].w) - b > eps;
+        if (!istMax && !istMin) continue;
+        const den = a - 2 * b + c; let dx = 0;
+        if (Math.abs(den) > 1e-12) dx = Math.max(-1, Math.min(1, 0.5 * (a - c) / den));
+        const wv = b - 0.25 * (a - c) * dx, h = (pos[i + 1].x - pos[i - 1].x) / 2;
+        marken.push(punkt(pos[i].x + dx * h, wv));
       }
+      // Mausabfrage: Fläche zwischen Stabachse und Linie
+      const L = Math.hypot(pos[n - 1].bx - pos[0].bx, pos[n - 1].by - pos[0].by) || 1;
+      const ux = (pos[n - 1].bx - pos[0].bx) / L, uy = (pos[n - 1].by - pos[0].by) / L;
+      this.treffer.push({
+        art: "diag", nr: s.nr, name, einheit: this._einheit,
+        wert: x => this._interp(pos, x, "w"),
+        test: (mx, my) => {
+          const rx = mx - pos[0].bx, ry = my - pos[0].by, along = rx * ux + ry * uy, perp = rx * nx + ry * nz;
+          const lm = pos[n - 1].x - pos[0].x; if (lm <= 0) return null;
+          const t = along / L; if (t < -0.03 || t > 1.03) return null;
+          const x = pos[0].x + Math.max(0, Math.min(1, t)) * lm, w = this._interp(pos, x, "w"), off = w * kd * sk;
+          if (perp < Math.min(0, off) - 8 || perp > Math.max(0, off) + 8) return null;
+          const [cx, cy] = P(k0.x + e.c * x + nx * w * kd, k0.z + e.s * x + nz * w * kd), [bx, by] = P(k0.x + e.c * x, k0.z + e.s * x);
+          return { d: Math.abs(perp - off), x, pt: [cx, cy], fuss: [bx, by] };
+        },
+      });
     }
+    return marken;
   }
 
+  /** Lineare Interpolation einer Größe entlang der Stützstellen (sortiert nach x). */
+  _interp(arr, x, key) {
+    for (let i = 0; i < arr.length - 1; i++) {
+      if (x <= arr[i + 1].x + 1e-12) {
+        const d = arr[i + 1].x - arr[i].x, t = d > 1e-12 ? (x - arr[i].x) / d : 0;
+        return arr[i][key] + (arr[i + 1][key] - arr[i][key]) * Math.max(0, Math.min(1, t));
+      }
+    }
+    return arr[arr.length - 1][key];
+  }
+
+  /** Zahlenwerte an den Extremstellen; globales Maximum und Minimum (fett) haben Vorrang, nahe Beschriftungen entfallen. */
+  _beschrifte(g, marken, global) {
+    const gesehen = [];
+    const rang = [...global, ...[...marken].sort((a, b) => Math.abs(b.w) - Math.abs(a.w))];
+    g.textAlign = "center";
+    for (const p of rang) {
+      if (Math.abs(p.w) < 1e-6 || gesehen.some(q => Math.hypot(q[0] - p.tx, q[1] - p.ty) < 34)) continue;
+      gesehen.push([p.tx, p.ty]);
+      const fett = global.includes(p), sg = Math.sign(p.w || 1);
+      g.fillStyle = "#111"; g.font = `${fett ? "bold " : ""}12px system-ui, sans-serif`;
+      if (fett) { g.beginPath(); g.arc(p.tx, p.ty, 3.5, 0, 7); g.fill(); }
+      g.fillText(fmt(p.w, 1), p.tx + p.nx * 11 * sg, p.ty + p.nz * 11 * sg + 4);
+    }
+    g.font = "12px system-ui, sans-serif";
+  }
+
+  /** Verformte Lage der Stäbe, größte Knotenverschiebung, Mausabfrage. */
   _verformung(g, erg, stab, P, sk, ausd, ueh) {
     const f = this.fv;
     if (!f) return "Keine Verformung.";
     g.strokeStyle = "#8e24aa"; g.lineWidth = 2.5;
     for (const s of erg.staebe) {
       const e = s.el, a = this._knoten[e.i];
-      g.beginPath();
-      s.verf.forEach((p, i) => {
-        const [x, y] = P(a.x + e.c * p.x + p.dU * f, a.z + e.s * p.x + p.dW * f);
-        i ? g.lineTo(x, y) : g.moveTo(x, y);
+      const pts = s.verf.map(p => ({ xy: P(a.x + e.c * p.x + p.dU * f, a.z + e.s * p.x + p.dW * f), x: p.x, u: p.dU * 1000, w: p.dW * 1000, f: p.f * 1000 }));
+      g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(...p.xy) : g.moveTo(...p.xy)); g.stroke();
+      this.treffer.push({
+        art: "verf", nr: s.nr,
+        wert: x => ({ u: this._interp(pts, x, "u"), w: this._interp(pts, x, "w"), f: this._interp(pts, x, "f") }),
+        test: (mx, my) => {
+          let best = null;
+          for (let i = 0; i < pts.length - 1; i++) {
+            const [x1, y1] = pts[i].xy, [x2, y2] = pts[i + 1].xy, dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy || 1;
+            const t = Math.max(0, Math.min(1, ((mx - x1) * dx + (my - y1) * dy) / l2)), d = Math.hypot(mx - (x1 + t * dx), my - (y1 + t * dy));
+            if (d <= 10 && (!best || d < best.d)) best = { d, x: pts[i].x + t * (pts[i + 1].x - pts[i].x), pt: [x1 + t * dx, y1 + t * dy] };
+          }
+          return best;
+        },
       });
-      g.stroke();
     }
     // Größte Knotenverschiebung beschriften
     let k = erg.verschiebungen[0];
     erg.verschiebungen.forEach(v => { if (Math.hypot(v.u, v.w) > Math.hypot(k.u, k.w)) k = v; });
-    return `Verformte Lage (violett), ${ueh > 0 ? "" : "automatisch "}${fmt(f, 0)}-fach überhöht; größte Knotenverschiebung ${fmt(Math.hypot(k.u, k.w) * 1000, 2)} mm (Knoten ${k.k}).`;
+    return `Verformte Lage (violett), ${ueh > 0 ? "" : "automatisch "}${fmt(f, 0)}-fach überhöht; größte Knotenverschiebung ${fmt(Math.hypot(k.u, k.w) * 1000, 2)} mm (Knoten ${k.k}). Mit der Maus über die Linie fahren zeigt die Werte.`;
+  }
+
+  /** Werte am Mauszeiger: Marke auf der Linie und Textfeld. */
+  _tooltip(g, w, h) {
+    let best = null, bt = null;
+    for (const t of this.treffer) {
+      const r = t.test(this.maus.x, this.maus.y);
+      if (r && (!best || r.d < best.d)) { best = r; bt = t; }
+    }
+    if (!best) return;
+    const zeilen = [];
+    if (bt.art === "diag") {
+      const alle = this.treffer.filter(t => t.art === "diag" && t.nr === bt.nr);
+      zeilen.push(`Stab ${bt.nr}, x = ${fmt(best.x, 2)} m`);
+      alle.forEach(t => zeilen.push(`${t.name ? t.name + ": " : ""}${fmt(t.wert(best.x), 2)} ${t.einheit}`));
+      if (best.fuss) { g.strokeStyle = "#555"; g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(...best.fuss); g.lineTo(...best.pt); g.stroke(); g.setLineDash([]); }
+    } else {
+      const v = bt.wert(best.x);
+      zeilen.push(`Stab ${bt.nr}, x = ${fmt(best.x, 2)} m`, `u_x = ${fmt(v.u, 2)} mm`, `u_z = ${fmt(v.w, 2)} mm`, `Durchbiegung zur Sehne = ${fmt(v.f, 2)} mm`);
+    }
+    g.fillStyle = "#111"; g.beginPath(); g.arc(best.pt[0], best.pt[1], 4, 0, 7); g.fill();
+    g.font = "12px system-ui, sans-serif";
+    const bw = Math.max(...zeilen.map(z => g.measureText(z).width)) + 14, bh = zeilen.length * 16 + 8;
+    const bx = Math.min(Math.max(4, best.pt[0] + 12), w - bw - 4), by = Math.min(Math.max(4, best.pt[1] + 12), h - bh - 4);
+    g.fillStyle = "rgba(255,255,255,.96)"; g.strokeStyle = "#555"; g.lineWidth = 1;
+    g.fillRect(bx, by, bw, bh); g.strokeRect(bx, by, bw, bh);
+    g.fillStyle = "#111"; g.textAlign = "left";
+    zeilen.forEach((z, i) => g.fillText(z, bx + 7, by + 18 + i * 16));
   }
 }
 
@@ -317,21 +477,33 @@ class StatikSeite {
        { k: "hz", l: "hält Z", haken: true }, { k: "hphi", l: "hält φ", haken: true }],
       z => ({ x: z.length ? z[z.length - 1].x + 3 : 0, z: z.length ? z[z.length - 1].z : 0, hx: false, hz: false, hphi: false }), bei, "Knoten");
     this.edStaebe = new ZeilenEditor(document.getElementById("sw-staebe"),
-      [{ k: "i", l: "von" }, { k: "j", l: "nach" }, { k: "A", l: "A [cm²]" }, { k: "I", l: "I [cm⁴]" },
-       { k: "gel", l: "Gelenk", opt: { "-": "–", anfang: "Anfang", ende: "Ende", beide: "beide" } }],
-      z => ({ i: z.length ? z[z.length - 1].j : 1, j: (z.length ? z[z.length - 1].j : 1) + 1, A: 53.8, I: 8356, gel: "-" }), bei, "Stab");
+      [{ k: "i", l: "von" }, { k: "j", l: "nach" },
+       { k: "q", l: "Quersch.", kurz: true, opt: () => this._qsOptionen() },
+       { k: "qe", l: "Ende", kurz: true, opt: () => this._qsOptionen("= Anfang"), sperre: z => !(Number(z.q) > 0) },
+       { k: "A", l: "A [cm²]", sperre: z => Number(z.q) > 0 }, { k: "I", l: "I [cm⁴]", sperre: z => Number(z.q) > 0 },
+       { k: "gel", l: "Gelenk", kurz: true, opt: { "-": "–", anfang: "Anfang", ende: "Ende", beide: "beide" } }],
+      z => ({ i: z.length ? z[z.length - 1].j : 1, j: (z.length ? z[z.length - 1].j : 1) + 1, q: z.length ? z[z.length - 1].q : "1", qe: "0", A: 53.8, I: 8356, gel: "-" }), bei, "Stab");
+    this.qsListe = new QuerschnittsListe(document.getElementById("sw-qs"), () => { this.edStaebe.baue(); this.aktualisiere(); }, n => this._qsLoeschen(n));
     this.edEW = new ZeilenEditor(document.getElementById("sw-ew"),
       [{ k: "name", l: "Name", text: true }, { k: "art", l: "Art", opt: EW_ARTEN },
        { k: "kat", l: "Kat.", opt: () => Object.fromEntries(Object.entries(EW_KATEGORIEN).map(([k, v]) => [k, v.text])) },
        { k: "psi0", l: "ψ₀" }, { k: "psi1", l: "ψ₁" }, { k: "psi2", l: "ψ₂" }],
       () => StatikSeite.neueEinwirkung(), bei, "Einwirkung",
       { minZeilen: 1, feld: (z, k) => this._ewFeld(z, k), vorLoeschen: n => this._ewLoeschen(n) });
+    this.edFed = new ZeilenEditor(document.getElementById("sw-fed"),
+      [{ k: "k", l: "Knoten" }, { k: "cx", l: "c<sub>x</sub> [kN/m]" }, { k: "cz", l: "c<sub>z</sub> [kN/m]" }],
+      () => ({ k: 1, cx: 0, cz: 10000 }), bei, "Feder");
+    this.edBett = new ZeilenEditor(document.getElementById("sw-bett"),
+      [{ k: "s", l: "Stab" }, { k: "kx", l: "k<sub>x</sub> [kN/m²]" }, { k: "kz", l: "k<sub>z</sub> [kN/m²]" },
+       { k: "bezug", l: "Bezug", kurz: true, opt: { lokal: "lokal (x′, z′)", global: "global (X, Z)" } }],
+      () => ({ s: 1, kx: 0, kz: 20000, bezug: "lokal" }), bei, "Bettung");
     this.edKL = new ZeilenEditor(document.getElementById("sw-kl"),
       [{ k: "k", l: "Knoten" }, { k: "Fx", l: "Fx [kN]" }, { k: "Fz", l: "Fz [kN]" }, { k: "M", l: "M [kNm]" }, ew()],
       () => ({ k: 1, Fx: 0, Fz: 0, M: 0, ew: "1" }), bei, "Knotenlast");
     this.edStr = new ZeilenEditor(document.getElementById("sw-str"),
-      [{ k: "s", l: "Stab" }, { k: "q", l: "q [kN/m]" }, { k: "richtung", l: "Richtung", opt: RICHTUNGEN }, ew()],
-      () => ({ s: 1, q: 10, richtung: "Z", ew: "1" }), bei, "Streckenlast");
+      [{ k: "s", l: "Stab" }, { k: "q", l: "q [kN/m]" }, { k: "a", l: "von [m]" }, { k: "b", l: "bis [m]", platz: "Ende" },
+       { k: "richtung", l: "Richtung", opt: RICHTUNGEN }, ew()],
+      () => ({ s: 1, q: 10, a: 0, b: NaN, richtung: "Z", ew: "1" }), bei, "Streckenlast");
     this.edEin = new ZeilenEditor(document.getElementById("sw-ein"),
       [{ k: "s", l: "Stab" }, { k: "F", l: "F [kN]" }, { k: "a", l: "a [m]" }, { k: "richtung", l: "Richtung", opt: RICHTUNGEN }, ew()],
       () => ({ s: 1, F: 10, a: 1, richtung: "Z", ew: "1" }), bei, "Einzellast");
@@ -347,11 +519,11 @@ class StatikSeite {
     typ.addEventListener("input", () => { document.getElementById("sw-komb-nr").value = "env"; this.aktualisiere(); });
     ["sw-E", "sw-art", "sw-ueh", "sw-komb-nr", "sw-gGs", "sw-gGi", "sw-gQ", "sw-gA"].forEach(id => document.getElementById(id).addEventListener("input", bei));
     document.getElementById("sw-beispiel").addEventListener("click", () => { this.lade(StatikSeite.BEISPIEL()); this.aktualisiere(); });
-    document.getElementById("sw-leer").addEventListener("click", () => { this.lade({ E: 210000, knoten: [], staebe: [], knotenlasten: [], strecken: [], einzel: [], gruppen: [StatikSeite.neueEinwirkung("G")] }); this.aktualisiere(); });
+    document.getElementById("sw-leer").addEventListener("click", () => { this.lade({ E: 210000, knoten: [], staebe: [], querschnitte: [QuerschnittsListe.neu()], knotenlasten: [], strecken: [], einzel: [], gruppen: [StatikSeite.neueEinwirkung("G")] }); this.aktualisiere(); });
     window.addEventListener("resize", () => { if (document.getElementById("tab-statik").classList.contains("aktiv")) this.aktualisiere(); });
 
     let start = null;
-    try { start = JSON.parse(localStorage.getItem("statik-modell-2")); } catch (e) { start = null; }
+    try { start = JSON.parse(localStorage.getItem("statik-modell-4")); } catch (e) { start = null; }
     this.lade(start && start.knoten && start.gruppen ? start : StatikSeite.BEISPIEL());
     this.aktualisiere();
   }
@@ -369,12 +541,54 @@ class StatikSeite {
       E: 210000,
       knoten: [{ x: 0, z: 3, hx: true, hz: true, hphi: false }, { x: 0, z: 0, hx: false, hz: false, hphi: false },
                { x: 6, z: 0, hx: false, hz: false, hphi: false }, { x: 6, z: 3, hx: false, hz: true, hphi: false }],
-      staebe: [{ i: 1, j: 2, A: 53.8, I: 8356, gel: "-" }, { i: 2, j: 3, A: 53.8, I: 8356, gel: "-" }, { i: 3, j: 4, A: 53.8, I: 8356, gel: "-" }],
+      querschnitte: [QuerschnittsListe.neu()],
+      staebe: [1, 2, 3].map(n => ({ i: n, j: n + 1, q: "1", A: 53.8, I: 8356, gel: "-" })),
       gruppen: [StatikSeite.neueEinwirkung("G"), w("Nutzlast Büro", "B"), w("Wind", "W")],
       knotenlasten: [{ k: 2, Fx: 10, Fz: 0, M: 0, ew: "3" }],
-      strecken: [{ s: 2, q: 12, richtung: "Z", ew: "1" }, { s: 2, q: 8, richtung: "Z", ew: "2" }], einzel: [],
+      strecken: [{ s: 2, q: 12, a: 0, b: NaN, richtung: "Z", ew: "1" }, { s: 2, q: 8, a: 1.5, b: 4.5, richtung: "Z", ew: "2" }], einzel: [],
       tsb: "strgeo",
     };
+  }
+
+  /* ---------- Querschnitte ---------- */
+
+  /** Auswahlliste für die Stäbe: 0 = manuell (A, I, globales E), sonst Q1, Q2 ... */
+  _qsOptionen(null0 = "manuell") {
+    const o = { 0: null0 };
+    this.qsListe.liste.forEach((q, n) => { o[String(n + 1)] = this.qsListe.name(n); });
+    return o;
+  }
+
+  /** Beim Löschen eines Querschnitts die Verweise der Stäbe anpassen (gelöscht -> manuell). */
+  _qsLoeschen(n) {
+    this.edStaebe.zeilen.forEach(s => ['q', 'qe'].forEach(f => { const v = Number(s[f]) || 0; s[f] = String(v === n + 1 ? 0 : v > n + 1 ? v - 1 : v); }));
+  }
+
+  /** Stäbe mit Querschnitt: A, I, E aus Querschnitt und Material; liefert Modellkopie für die Berechnung. */
+  _aufloesen(m) {
+    let geaendert = false;
+    const staebe = m.staebe.map((s, n) => {
+      const q = Number(s.q) || 0; if (!q) return { ...s };
+      const k = QuerschnittsListe.kennwerte(this.qsListe.liste[q - 1] || { typ: "" });
+      if (k.fehler) throw new Error(`Stab ${n + 1}, Querschnitt Q${q}: ${k.fehler}.`);
+      const A = +k.A.toFixed(2), I = +k.I.toFixed(1);       // gerundete Anzeige
+      if (s.A !== A || s.I !== I) { s.A = A; s.I = I; geaendert = true; }
+      // Voute: anderer Querschnitt am Stabende -> linear veränderlich (Teilstäbe im Rechenkern)
+      const qe = Number(s.qe) || 0;
+      s.voute = null;
+      if (qe && qe !== q) {
+        const q1 = this.qsListe.liste[qe - 1], k1 = QuerschnittsListe.kennwerte(q1 || { typ: "" });
+        if (k1.fehler) throw new Error(`Stab ${n + 1}, Querschnitt Q${qe}: ${k1.fehler}.`);
+        if (k1.E !== k.E) throw new Error(`Stab ${n + 1}: Voute – Material an Anfang und Ende muss denselben E-Modul haben.`);
+        const v = QuerschnittsListe.voute(this.qsListe.liste[q - 1], q1);
+        if (v.fehler) throw new Error(`Stab ${n + 1}: ${v.fehler}.`);
+        s.voute = { h0: v.h0, h1: v.h1 };
+        return { ...s, A: k.A, I: k.I, E: k.E, seg: v.seg };
+      }
+      return { ...s, A: k.A, I: k.I, E: k.E };
+    });
+    if (geaendert) this.edStaebe.baue();     // angezeigte A- und I-Werte aktualisieren
+    return { ...m, staebe };
   }
 
   /* ---------- Einwirkungen ---------- */
@@ -425,8 +639,11 @@ class StatikSeite {
     if (!m.gruppen || !m.gruppen.length) m.gruppen = [StatikSeite.neueEinwirkung("G")];
     [...m.knotenlasten, ...m.strecken, ...m.einzel].forEach(l => { l.ew = String(l.ew || 1); });
     document.getElementById("sw-E").value = m.E;
+    this.qsListe.setze(m.querschnitte && m.querschnitte.length ? m.querschnitte : [QuerschnittsListe.neu()]);
+    m.staebe.forEach(s => { s.q = String(s.q || 0); s.qe = String(s.qe || 0); });
     this.edEW.setze(m.gruppen);
     this.edKnoten.setze(m.knoten); this.edStaebe.setze(m.staebe); this.edKL.setze(m.knotenlasten);
+    this.edFed.setze(m.federn || []); this.edBett.setze(m.bettung || []);
     this.edStr.setze(m.strecken); this.edEin.setze(m.einzel);
     document.getElementById("sw-nach").value = m.tsb || "strgeo";
     this._tsbSetzen(m.tsb || "strgeo");
@@ -437,8 +654,8 @@ class StatikSeite {
   modell() {
     const nr = l => ({ ...l, ew: Number(l.ew) || 1 });
     return {
-      E: zahl("sw-E"), knoten: this.edKnoten.zeilen, staebe: this.edStaebe.zeilen,
-      knotenlasten: this.edKL.zeilen.map(nr), strecken: this.edStr.zeilen.map(nr), einzel: this.edEin.zeilen.map(nr),
+      E: zahl("sw-E"), querschnitte: this.qsListe.liste, knoten: this.edKnoten.zeilen, staebe: this.edStaebe.zeilen,
+      federn: this.edFed.zeilen, bettung: this.edBett.zeilen, knotenlasten: this.edKL.zeilen.map(nr), strecken: this.edStr.zeilen.map(nr), einzel: this.edEin.zeilen.map(nr),
       gruppen: this.edEW.zeilen, tsb: document.getElementById("sw-nach").value,
       tsbWerte: ["sw-gGs", "sw-gGi", "sw-gQ", "sw-gA"].map(zahl),
     };
@@ -449,18 +666,22 @@ class StatikSeite {
   /** Kombination wählen, rechnen und anzeigen. */
   aktualisiere() {
     const m = this.modell(), box = document.getElementById("sw-ergebnis"), art = document.getElementById("sw-art").value;
-    try { localStorage.setItem("statik-modell-2", JSON.stringify(m)); } catch (e) { /* Speicher nicht verfügbar */ }
+    try { localStorage.setItem("statik-modell-4", JSON.stringify(m)); } catch (e) { /* Speicher nicht verfügbar */ }
     this._unbestimmtheit(m);
+    this._bettung = m.bettung;
     const ids = this._ids();
     this.zeichnung.ids = ids; this.zeichnung._knoten = m.knoten;
+    let mr = m, fehler0 = null;
+    try { mr = this._aufloesen(m); } catch (e) { fehler0 = e.message; }
     let erg = null, fehler = null, info = "", kombis = [], env = null, typ = document.getElementById("sw-komb-typ").value;
     try {
+      if (fehler0) throw new Error(fehler0);
       const nG = m.gruppen.length;
       for (const l of [...m.knotenlasten, ...m.strecken, ...m.einzel]) if (l.ew < 1 || l.ew > nG) throw new Error("Einer Last ist eine nicht vorhandene Einwirkung zugeordnet.");
       const [gGs, gGi, gQ, gA] = m.tsbWerte;
       if (![gGs, gGi, gQ, gA].every(Number.isFinite)) throw new Error("Teilsicherheitsbeiwerte unvollständig.");
       if (m.gruppen.some(g => ![g.psi0, g.psi1, g.psi2].every(Number.isFinite))) throw new Error("Kombinationsbeiwerte unvollständig.");
-      const lr = new LastfallRechner(m, nG);
+      const lr = new LastfallRechner(mr, nG);
       kombis = new Kombinationen(m.gruppen, { gGsup: gGs, gGinf: gGi, gQ, gA }, lr.aktiv).erzeuge(typ);
       const ergs = kombis.map(k => lr.kombination(k.faktoren));
       // Auswahl der Kombination aktualisieren
@@ -492,9 +713,10 @@ class StatikSeite {
     const box = document.getElementById("sw-unbest");
     if (!m.staebe.length) { box.innerHTML = ""; return; }
     const u = Stabwerk.unbestimmtheit(m);
-    const text = u.n < 0 ? `<span class="fehler">n = ${u.n}: Das System ist kinematisch verschieblich (Mechanismus).</span>`
+    const text = u.bettung ? `n = ${u.n} ohne Bettung (die Bettung stützt die Stäbe zusätzlich elastisch über die Länge)`
+      : u.n < 0 ? `<span class="fehler">n = ${u.n}: Das System ist kinematisch verschieblich (Mechanismus).</span>`
       : u.n === 0 ? "n = 0: statisch bestimmt" : `n = ${u.n}: ${u.n}-fach statisch unbestimmt`;
-    box.innerHTML = `<b>Statische Unbestimmtheit:</b> ${text} <span class="hinweis">(Abzählkriterium n = 3·s + r − 3·k − g mit s = ${u.s} Stäbe, r = ${u.r} Lagerreaktionen, k = ${u.k} Knoten, g = ${u.g} Gelenkbedingungen; notwendige, nicht hinreichende Bedingung)</span>`;
+    box.innerHTML = `<b>Statische Unbestimmtheit:</b> ${text} <span class="hinweis">(Abzählkriterium n = 3·s + r − 3·k − g mit s = ${u.s} Stäbe, r = ${u.r} Lagerreaktionen (Federn an Knoten eingerechnet), k = ${u.k} Knoten, g = ${u.g} Gelenkbedingungen; notwendige, nicht hinreichende Bedingung)</span>`;
   }
 
   _ewInfo(m, ids, typ) {
@@ -526,7 +748,20 @@ class StatikSeite {
       const e = s.ext;
       h += `<tr><td>${s.nr}</td><td>${fmt(s.L, 2)}</td><td>${fmt(e.N.min, 1)} / ${fmt(e.N.max, 1)}</td><td>${fmt(e.V.min, 1)} / ${fmt(e.V.max, 1)}</td><td>${fmt(e.M.min, 1)} / ${fmt(e.M.max, 1)}</td><td>${fmt(s.fmax * 1000, 2)}</td></tr>`;
     }
-    return h + "</table><p class=\"hinweis\">f<sub>max</sub> = größte Durchbiegung gegenüber der Sehne des verformten Stabs.</p>";
+    h += "</table><p class=\"hinweis\">f<sub>max</sub> = größte Durchbiegung gegenüber der Sehne des verformten Stabs.</p>";
+    // Bettungskräfte (Federkraft je Länge = k · Verschiebung)
+    for (const b of this._bettung || []) {
+      const s = erg.staebe[b.s - 1]; if (!s) continue;
+      const lok = b.bezug !== "global";
+      let mz = { v: 0, x: 0 }, mx = { v: 0, x: 0 };
+      for (const p of s.verf) {
+        const qz = b.kz * (lok ? p.w : p.dW), qx = b.kx * (lok ? p.u : p.dU);
+        if (Math.abs(qz) > Math.abs(mz.v)) mz = { v: qz, x: p.x };
+        if (Math.abs(qx) > Math.abs(mx.v)) mx = { v: qx, x: p.x };
+      }
+      h += `<p class="hinweis">Bettung Stab ${b.s}: größte Bettungskraft ${lok ? "q<sub>z′</sub>" : "q<sub>Z</sub>"} = ${fmt(mz.v, 2)} kN/m bei x = ${fmt(mz.x, 2)} m${b.kx > 0 ? `; ${lok ? "q<sub>x′</sub>" : "q<sub>X</sub>"} = ${fmt(mx.v, 2)} kN/m` : ""} (positiv = Feder wirkt entgegen der Verschiebung).</p>`;
+    }
+    return h;
   }
 
   /** Tabellen für die Umhüllende: Minimum/Maximum mit maßgebender Kombination (K-Nummer) */

@@ -163,16 +163,49 @@ h3.unter { font-size: .95rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid v
 .sw-tab input.sw-text { min-width: 4.5rem; }
 .sw-tab select { min-width: 5.2rem; padding-left: 2px; padding-right: 0; }  /* lange Texte werden abgeschnitten, Anfang bleibt lesbar */
 .sw-tab select.sw-kurz { min-width: 4.2rem; }
+.sw-tab input[type=number] { min-width: 3rem; }
 @media (max-width: 600px) {
   .sw-tab input, .sw-tab input[type=number] { min-width: 2.6rem; padding: 3px 1px; }
   .sw-tab input.sw-text { min-width: 4rem; }
   .sw-tab select, .sw-tab select.sw-kurz { min-width: 3.6rem; }
   .sw-tab th { font-size: .68rem; }
+  .sw-tab td, .sw-tab th { padding-left: 1px; padding-right: 1px; }
+  .sw-tab input, .sw-tab input[type=number] { min-width: 2.2rem; }
+  .sw-tab select.sw-kurz { min-width: 2.9rem; }
+  .sw-x { padding: 0 4px; }
   #sw-ew input[type=number] { min-width: 2.1rem; }
   #sw-ew input.sw-text { min-width: 3rem; max-width: 4.5rem; }
   #sw-ew select { min-width: 3.2rem; }
 }
 .sw-tab { width: 100%; table-layout: auto; }
-#tab-statik.aktiv { grid-template-columns: clamp(380px, 40vw, 620px) 1fr; }
+#tab-statik.aktiv { grid-template-columns: clamp(380px, 44vw, 640px) 1fr; }
 @media (max-width: 820px) { #tab-statik.aktiv { grid-template-columns: 1fr; } }
 #tab-statik .eingabe { overflow-x: hidden; }
+
+/* ---- Statik: Querschnittskarten ---- */
+.sw-karte { border: 1px solid #cfd6de; border-radius: 8px; padding: .4rem .5rem; margin-bottom: .5rem; background: #fafbfc; }
+.sw-kkopf { display: flex; gap: .4rem; align-items: center; margin-bottom: .3rem; }
+.sw-kkopf select { flex: 1; min-width: 0; font-size: 16px; padding: 3px; }
+.sw-kfelder { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .3rem .5rem; }
+.sw-kfelder label { margin: 0; }
+.sw-kfelder input, .sw-kfelder select { width: 100%; font-size: 16px; padding: 3px; box-sizing: border-box; }
+
+/* ---- Aufklappbare Ergebnisabschnitte ---- */
+.ergebnis details { border: 1px solid #cfd6de; border-radius: 8px; margin: .5rem 0; padding: 0 .6rem; background: #fff; }
+.ergebnis details > summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+.ergebnis details[open] > summary { border-bottom: 1px solid #e3e7ec; margin-bottom: .4rem; }
+#sb-skizze { touch-action: pan-y; height: 420px; }
+
+#tab-statik .eingabe > div[id^="sw-"] { overflow-x: auto; }   /* Notfall: sehr breite Tabellen scrollen statt abgeschnitten zu werden */
+
+/* ---- Lastermittlung ---- */
+#tab-lasten.aktiv { grid-template-columns: clamp(340px, 38vw, 520px) 1fr; }
+@media (max-width: 820px) { #tab-lasten.aktiv { grid-template-columns: 1fr; } }
+#ed-canvas { width: 100%; background: #fff; border: 1px solid #cfd6de; border-radius: 8px; touch-action: pan-y; height: 420px; }
+#tab-lasten .sw-kkopf input[type=text] { font-size: 16px; padding: 3px; min-width: 0; }
+#tab-lasten details > summary { cursor: pointer; font-size: .9rem; margin: .3rem 0; }
+label.cb { display: flex; gap: .5rem; align-items: center; }
+label.cb input { width: auto; }
+#ed-ergebnis { overflow-x: auto; }
+#tab-lasten .sw-kfelder { grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); }
+.raster label.cb, label.cb { flex-direction: row; align-items: center; }

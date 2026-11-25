@@ -701,11 +701,54 @@ class StahlbauSeite {
 /* ======================= Skizze Stahlbeton (Querschnitt + Dehnungen) ======================= */
 
 class SBSkizze {
-  constructor(canvas) { this.cv = canvas; }
+  constructor(canvas, infoEl) {
+    this.cv = canvas; this.infoEl = infoEl; this.staebe = []; this.wahl = -1; this.letzte = null;
+    // Interaktion: Maus überfährt / Finger tippt einen Stab -> Hervorhebung und Angaben
+    const finde = e => {
+      const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      let best = -1, dm = 1e9;
+      this.staebe.forEach((s, i) => { const d = Math.hypot(s.x - x, s.y - y); if (d < Math.max(s.r + 8, 14) && d < dm) { dm = d; best = i; } });
+      return best;
+    };
+    const setze = i => { if (i !== this.wahl) { this.wahl = i; this.neu(); } };
+    canvas.addEventListener("pointermove", e => { if (e.pointerType === "mouse") setze(finde(e)); });
+    canvas.addEventListener("pointerleave", () => setze(-1));
+    canvas.addEventListener("pointerdown", e => { const i = finde(e); setze(e.pointerType === "mouse" ? i : (i === this.wahl ? -1 : i)); });
+  }
 
-  leeren() { canvasVorbereiten(this.cv); }
+  leeren() { canvasVorbereiten(this.cv); this.staebe = []; this.letzte = null; }
 
-  zeichne(q, res) {
+  /** Letzte Zeichnung wiederholen (z. B. nach Änderung der Auswahl). */
+  neu() { if (this.letzte) this.zeichne(...this.letzte); }
+
+  /**
+   * Bewehrungsstäbe als Kreise im Querschnitt (inkl. Bügel). Positionen in mm.
+   * bew = {lay, l2, ds, dsD, dsw, cnom, platte, W} (W: Breite, über die die Zugbewehrung verteilt wird)
+   */
+  _staebe(q, res, bew, ctx) {
+    const { X, Y, zp, xs, bmax, sk } = ctx, liste = [];
+    const x0 = (bmax - bew.W) / 2;
+    const m = bew.cnom + (bew.platte ? 0 : bew.dsw);
+    // Stäbe einer Lage: k Stück gleichmäßig zwischen den Bügeln bzw. bei Platten mit Achsabstand s
+    const lage = (k, ds, abstZ, druck, name, nr, zug) => {
+      for (let i = 0; i < k; i++) {
+        const xm = bew.platte ? x0 + (i + 0.5) * bew.W / k : k === 1 ? x0 + bew.W / 2 : x0 + m + ds / 2 + i * (bew.W - 2 * m - ds) / (k - 1);
+        const zc = druck ? abstZ : q.h - abstZ;                       // Abstand vom Druckrand
+        const nb = k > 1 ? (bew.W - 2 * m - ds) / (k - 1) - ds : null;  // lichter Abstand
+        liste.push({ x: X(xm), y: Y(zp(zc)), r: Math.max(2.5, ds / 2 * sk), ds, druck: !zug, name, i: i + 1, k, lage: nr, abstRand: abstZ, licht: bew.platte ? bew.W / k - ds : nb });
+      }
+    };
+    const zahl = bew.lay;
+    zahl.proLage.forEach((k, i) => lage(k, bew.ds, bew.cnom + (bew.platte ? 0 : bew.dsw) + bew.ds / 2 + i * (bew.ds + zahl.amin), false, "Zugbewehrung", i + 1, true));
+    if (bew.l2) {
+      if (bew.platte) lage(bew.l2.n, bew.dsD, bew.cnom + bew.dsD / 2, true, "Druckbewehrung", 1, false);
+      else bew.l2.proLage.forEach((k, i) => lage(k, bew.dsD, bew.cnom + bew.dsw + bew.dsD / 2 + i * (bew.dsD + bew.l2.amin), true, "Druckbewehrung", i + 1, false));
+    }
+    return liste;
+  }
+
+  zeichne(q, res, bew) {
+    this.letzte = [q, res, bew];
     const { g, w, h } = canvasVorbereiten(this.cv);
     if (w === 0 || h === 0 || res.fehler) return;
 
@@ -757,8 +800,31 @@ class SBSkizze {
       g.lineWidth = 3; g.strokeStyle = "#fff"; g.strokeText(text, X(xs) + 3, Y(zz) + versatz);
       g.fillStyle = farbe; g.fillText(text, X(xs) + 3, Y(zz) + versatz);
     };
-    lage(zugY, "#c0392b", `As1 ${fmt(res.As1 / 100)}`, res.negativ ? 16 : -7);
-    if (res.As2 > 0) lage(druckY, "#1b3a6b", `As2 ${fmt(res.As2 / 100)}`, res.negativ ? -7 : 16);
+    this.staebe = [];
+    if (bew) {
+      // Bügel (Balken): Rechteck im Abstand c_nom + Ø_sw/2 vom Rand
+      if (!bew.platte) {
+        g.strokeStyle = "#555"; g.lineWidth = Math.max(1.2, bew.dsw * sk);
+        const e = bew.cnom + bew.dsw / 2;
+        g.beginPath(); g.roundRect(X(xs + e), Y(e), (q.b - 2 * e) * sk, (q.h - 2 * e) * sk, Math.max(2, 2 * bew.dsw * sk)); g.stroke();
+      }
+      this.staebe = this._staebe(q, res, bew, { X, Y, zp, xs, bmax, sk });
+      this.staebe.forEach((s, i) => {
+        g.beginPath(); g.arc(s.x, s.y, s.r, 0, 2 * Math.PI);
+        g.fillStyle = s.druck ? "#1b3a6b" : "#c0392b"; g.fill();
+        g.lineWidth = i === this.wahl ? 3 : 1; g.strokeStyle = i === this.wahl ? "#f0a800" : "#fff"; g.stroke();
+      });
+      // Beschriftung der Lagen und Angaben zum gewählten Stab
+      g.fillStyle = "#c0392b"; g.fillText(`${bew.lay.n} Ø${bew.ds}`, X(xs) + 3, Y(zugY) + (res.negativ ? 22 : -10));
+      if (bew.l2) { g.fillStyle = "#1b3a6b"; g.fillText(`${bew.l2.n} Ø${bew.dsD}`, X(xs) + 3, Y(druckY) + (res.negativ ? -10 : 22)); }
+      const s = this.staebe[this.wahl];
+      if (this.infoEl) this.infoEl.textContent = s
+        ? `${s.name}, Stab ${s.i} von ${s.k} in Lage ${s.lage}: Ø${s.ds} mm, A = ${fmt(Math.PI * s.ds * s.ds / 400, 2)} cm², Achsabstand zum Rand ${fmt(s.abstRand, 0)} mm${s.licht !== null && s.k > 1 ? `, lichter Abstand zum Nachbarn ${fmt(s.licht, 0)} mm` : ""}.`
+        : "Stab antippen oder mit der Maus überfahren: Durchmesser, Lage und Abstände.";
+    } else {
+      lage(zugY, "#c0392b", `As1 ${fmt(res.As1 / 100)}`, res.negativ ? 16 : -7);
+      if (res.As2 > 0) lage(druckY, "#1b3a6b", `As2 ${fmt(res.As2 / 100)}`, res.negativ ? -7 : 16);
+    }
 
     // ---- Dehnungsdiagramm ----
     const dn = res.dehnung;
@@ -864,7 +930,8 @@ class SBSkizze {
 
 class StahlbetonSeite {
   constructor() {
-    this.skizze = new SBSkizze(document.getElementById("sb-skizze"));
+    this.skizze = new SBSkizze(document.getElementById("sb-skizze"), document.getElementById("sb-bar-info"));
+    this.offen = {};                       // Zustand der aufklappbaren Ergebnisabschnitte
     const sel = document.getElementById("sb-beton");
     BETONKLASSEN.forEach(k => sel.add(new Option(k[0], k[0])));
     sel.value = "C30/37";
@@ -873,6 +940,7 @@ class StahlbetonSeite {
     dm("sb-ds", [8, 10, 12, 14, 16, 20, 25, 28, 32], 20);
     dm("sb-dsd", [8, 10, 12, 14, 16, 20, 25, 28, 32], 16);
     dm("sb-dsw", [6, 8, 10, 12], 8);
+    [8, 10, 12, 14, 16, 20, 25, 28, 32, 40].forEach(d => document.getElementById("sb-v-d").add(new Option(d, d)));
     // Expositionsklassen: je Gruppe eine Auswahl
     const box = document.getElementById("sb-expo");
     for (const [g, def] of Object.entries(Expositionsklassen.GRUPPEN)) {
@@ -885,7 +953,7 @@ class StahlbetonSeite {
     document.getElementById("sb-x-XC").value = "XC1";
 
     const ids = ["sb-typ", "sb-b", "sb-h", "sb-bf", "sb-hf", "sb-d1", "sb-d2", "sb-beton", "sb-stahl", "sb-linie", "sb-M", "sb-N",
-      "sb-V", "sb-m", "sb-cot", "sb-sw", "sb-nutz", "sb-bauteil", "sb-ds", "sb-dsd", "sb-dsw", "sb-nl", "sb-dg", "sb-dev", "sb-dmodus",
+      "sb-V", "sb-m", "sb-cot", "sb-sw", "sb-nutz", "sb-bauteil", "sb-ds", "sb-dsd", "sb-dsw", "sb-nl", "sb-dg", "sb-dev", "sb-dmodus", "sb-v-art", "sb-v-d", "sb-v-form", "sb-v-vb", "sb-v-ausn", "sb-v-cd", "sb-v-ast", "sb-v-K", "sb-v-p", "sb-v-rho",
       ...Object.keys(Expositionsklassen.GRUPPEN).map(g => "sb-x-" + g)];
     ids.forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
     // Betonklasse aus dem Ergebnis übernehmen
@@ -893,7 +961,17 @@ class StahlbetonSeite {
       const k = e.target.closest(".set-beton");
       if (k) { document.getElementById("sb-beton").value = k.dataset.klasse; this.aktualisiere(); }
     });
+    // aufklappbare Abschnitte: Zustand merken; Info-Knopf in der Überschrift klappt nicht auf/zu
+    const box2 = document.getElementById("sb-ergebnis");
+    box2.addEventListener("toggle", e => { if (e.target.dataset && e.target.dataset.k) this.offen[e.target.dataset.k] = e.target.open; }, true);
+    box2.addEventListener("click", e => { if (e.target.closest("summary .info")) e.preventDefault(); });
     this.aktualisiere();
+  }
+
+  /** Aufklappbarer Ergebnisabschnitt. */
+  _abschnitt(key, titel, info, inhalt) {
+    const offen = this.offen[key] !== false;
+    return `<details data-k="${key}" ${offen ? "open" : ""}><summary>${titel} ${info ? infoBtn(info) : ""}</summary>${inhalt}</details>`;
   }
 
   /** Beim Einblenden der Seite neu zeichnen. */
@@ -946,9 +1024,24 @@ class StahlbetonSeite {
           VEd, NEd, d: res.d, Asl: lay.As, cotVorgabe: zahl("sb-cot"), m: Number(val("sb-m")),
           dsw: Number(val("sb-dsw")), sVorgabe: zahl("sb-sw") })
         : null;
+      // Verankerung / Übergreifung (Vorbelegung aus der Biegebemessung)
+      let verank = null;
+      if (!res.fehler) {
+        const zug = val("sb-v-art") === "zug", dv = Number(val("sb-v-d")) || ds;
+        const hmm = zahl("sb-h") * 10;
+        const gut = val("sb-v-vb") === "auto" ? (!res.negativ || hmm <= 250) : val("sb-v-vb") === "gut";
+        const aus = zahl("sb-v-ausn") > 0 ? zahl("sb-v-ausn") / 100 : Math.min(1, res.As1 / lay.As);
+        const avh = lay.avh === null ? Infinity : lay.avh;
+        const cdAuto = Math.min(dk.cnom, avh / 2);
+        const cd = zahl("sb-v-cd") > 0 ? zahl("sb-v-cd") : cdAuto;
+        const p = { ds: dv, zug, gerade: val("sb-v-form") === "gerade", gut, cd, ausn: aus, astSum: zahl("sb-v-ast") * 100,
+          K: Number(val("sb-v-K")), p: zahl("sb-v-p"), rho1: Number(val("sb-v-rho")) };
+        verank = { p, r: new Verankerung(beton, new Betonstahl()).bemesse(p), cdAuto, autoVb: val("sb-v-vb") === "auto" };
+      }
+      const l2 = res.As2 > 0 && !res.fehler ? (platte ? wahl.flaechig(res.As2, dsD) : wahl.balken(res.As2, dsD, 0)) : null;
       if (auto) { document.getElementById("sb-d1").value = +(q.d1 / 10).toFixed(2); document.getElementById("sb-d2").value = +(q.d2 / 10).toFixed(2); }
-      this.zeigeErgebnis(box, res, { beton, expo, dk, wahl, lay, ds, dsD, dsw, auto, q, platte, nl, quer });
-      this.skizze.zeichne(q, res);
+      this.zeigeErgebnis(box, res, { beton, expo, dk, wahl, lay, ds, dsD, dsw, auto, q, platte, nl, quer, verank });
+      this.skizze.zeichne(q, res, res.fehler ? null : { lay, l2, ds, dsD, dsw, cnom: dk.cnom, platte, W: bZug });
     } catch (e) {
       box.innerHTML = `<span class="fehler">${e.message}</span>`;
       this.skizze.leeren();
@@ -1008,7 +1101,6 @@ class StahlbetonSeite {
     h += zeile(lbl("A<sub>s,max</sub>","Asmax"), fmt(r.AsMax / 100), haken(r.AsMaxOk) + " cm²");
     h += "</table>";
 
-    h += this._expositionHtml(x, haken) + this._bewehrungHtml(r, x, haken) + (x.quer ? this._querkraftHtml(x.quer, haken) : "");
 
     // Dehnungsebene über die relevanten Ebenen
     const dn = r.dehnung;
@@ -1036,12 +1128,16 @@ class StahlbetonSeite {
     }
 
     if (r.hinweise.length) h += "<ul>" + r.hinweise.map(t => `<li>${t}</li>`).join("") + "</ul>";
-    box.innerHTML = h;
+    box.innerHTML = this._abschnitt("expo", "Expositionsklasse und Betondeckung", "sbDeckung", this._expositionHtml(x, haken))
+      + this._abschnitt("bieg", "Biegebemessung", "arbeitslinie", h)
+      + (x.quer ? this._abschnitt("quer", "Querkraftbemessung", "sbQuer", this._querkraftHtml(x.quer, haken)) : "")
+      + this._abschnitt("bew", "Bewehrungswahl", "sbLage", this._bewehrungHtml(r, x, haken))
+      + (x.verank ? this._abschnitt("verank", "Verankerung und Übergreifung", "sbVerank", this._verankerungHtml(x.verank)) : "");
   }
 
   /** Querkraftbemessung: Betontraganteil, Druckstrebe, Bügel. */
   _querkraftHtml(v, haken) {
-    let h = `<p><b>Querkraftbemessung</b> ${infoBtn("sbQuer")}</p><table>`;
+    let h = "<table>";
     h += zeile("V<sub>Ed</sub>", fmt(v.V / 1e3, 1), "kN");
     h += zeile("V<sub>Rd,c</sub>" + (v.VRdcMinMassgebend ? " (Mindestwert)" : ""), fmt(v.VRdc / 1e3, 1), haken(!v.noetigBew) + (v.noetigBew ? " Querkraftbewehrung nötig" : " keine nötig"));
     h += zeile("Ausnutzung V<sub>Ed</sub>/V<sub>Rd,c</sub>", fmt(v.ausnutzungC, 2), "–");
@@ -1066,7 +1162,7 @@ class StahlbetonSeite {
   _expositionHtml(x, haken) {
     const { expo, dk, beton } = x;
     const ok = beton.fck >= expo.fckMin;
-    let h = `<p><b>Expositionsklasse und Betondeckung</b> ${infoBtn("sbDeckung")}</p><table>`;
+    let h = "<table>";
     h += zeile("Maßgebende Klasse", expo.massgebend, "");
     h += zeile("Mindestfestigkeitsklasse", `<b>${expo.klasseMin}</b>`, "");
     h += zeile("gewählter Beton " + beton.name, ok ? "ausreichend" : `<button type="button" class="set-beton" data-klasse="${expo.klasseMin}">${expo.klasseMin} wählen</button>`, haken(ok));
@@ -1081,11 +1177,43 @@ class StahlbetonSeite {
     return h;
   }
 
+  /** Verankerungs- und Übergreifungslänge mit allen Beiwerten. */
+  _verankerungHtml(v) {
+    const { p, r } = v, zug = p.zug, f = (x, d = 2) => fmt(x, d);
+    const auf5 = x => Math.ceil(x / 5 - 1e-9) * 5;
+    let h = "<table>";
+    h += zeile("Ø", f(p.ds, 0), "mm");
+    h += zeile("f<sub>ctd</sub> = α<sub>ct</sub>·0,7·f<sub>ctm</sub>/γ<sub>c</sub> (α<sub>ct</sub> = 1,0)", f(r.fctd), "N/mm²");
+    h += zeile(`η<sub>1</sub> (Verbund ${p.gut ? "gut" : "mäßig"}${v.autoVb ? ", automatisch" : ""}), η<sub>2</sub>`, `${f(r.eta1)} / ${f(r.eta2)}`, "–");
+    h += zeile("f<sub>bd</sub> = 2,25·η<sub>1</sub>·η<sub>2</sub>·f<sub>ctd</sub>", f(r.fbd), "N/mm²");
+    h += zeile(`σ<sub>sd</sub> = ${f(p.ausn * 100, 0)} % · f<sub>yd</sub>`, f(r.sigSd, 1), "N/mm²");
+    h += zeile("l<sub>b,rqd</sub> = (Ø/4)·σ<sub>sd</sub>/f<sub>bd</sub>", f(r.lbRqd, 0), "mm");
+    h += zeile(`c<sub>d</sub> (${zahl("sb-v-cd") > 0 ? "eingegeben" : "automatisch"})`, f(p.cd, 0), "mm");
+    if (zug) {
+      h += zeile("α<sub>1</sub> (Stabform)", f(r.a1), "–");
+      h += zeile("α<sub>2</sub> (Betondeckung)", f(r.a2), "–");
+      h += zeile("α<sub>3</sub> (Querbewehrung): Verankerung / Übergreifung", `${f(r.a3v)} / ${f(r.a3s)}`, "–");
+      h += zeile("α<sub>5</sub> (Querdruck)", f(r.a5), "–");
+      h += zeile("α<sub>6</sub> (Anteil gestoßener Stäbe)", f(r.a6), "–");
+    } else h += zeile("α<sub>1</sub> … α<sub>6</sub> (Druck)", "1,00", "–");
+    h += "</table><p><b>Verankerungslänge</b></p><table>";
+    h += zeile("l<sub>bd</sub> = α<sub>1</sub>·α<sub>2</sub>·α<sub>3</sub>·α<sub>5</sub>·l<sub>b,rqd</sub> (α<sub>2</sub>α<sub>3</sub>α<sub>5</sub> ≥ 0,7)", f(r.lbd, 0), "mm");
+    h += zeile(`l<sub>b,min</sub> = max(${zug ? "0,3" : "0,6"}·l<sub>b,rqd</sub>; 10Ø; 100)`, f(r.lbMin, 0), "mm");
+    h += zeile("<b>l<sub>bd</sub> maßgebend</b>", `<b>${f(r.lbdMass, 0)}</b>`, `mm (gewählt ${auf5(r.lbdMass)} mm = ${f(r.lbdMass / p.ds, 1)} Ø)`);
+    h += "</table><p><b>Übergreifungslänge</b></p><table>";
+    h += zeile("l<sub>0</sub> = α<sub>1</sub>·α<sub>2</sub>·α<sub>3</sub>·α<sub>5</sub>·α<sub>6</sub>·l<sub>b,rqd</sub>", f(r.l0, 0), "mm");
+    h += zeile("l<sub>0,min</sub> = max(0,3·α<sub>6</sub>·l<sub>b,rqd</sub>; 15Ø; 200)", f(r.l0Min, 0), "mm");
+    h += zeile("<b>l<sub>0</sub> maßgebend</b>", `<b>${f(r.l0Mass, 0)}</b>`, `mm (gewählt ${auf5(r.l0Mass)} mm = ${f(r.l0Mass / p.ds, 1)} Ø)`);
+    h += "</table>";
+    h += `<p class="hinweis">Gerade Stabenden: c<sub>d</sub> = min(a/2; c<sub>1</sub>; c); Haken: min(a/2; c<sub>1</sub>). Beim Stoß: liegen gestoßene Stäbe weiter als 4Ø auseinander, vergrößert sich l<sub>0</sub> um den Abstand über 4Ø. Ohne Eingabe von ΣA<sub>st</sub> wird die Querbewehrung nicht angesetzt (α<sub>3</sub> = 1,0).</p>`;
+    return h;
+  }
+
   /** Gewählte Bewehrung: Stabanzahl, Lagen, Abstände im Vergleich mit den Normwerten, d1-Kontrolle. */
   _bewehrungHtml(r, x, haken) {
     const { lay, wahl, ds, dsD, auto, q, platte } = x;
     const A1 = Math.PI * ds * ds / 4;
-    let h = `<p><b>Gewählte Bewehrung A<sub>s1</sub></b> ${infoBtn("sbLage")}</p><table>`;
+    let h = "<table>";
     h += zeile("Zugbewehrung", `<b>${lay.n} Ø${ds}</b>`,
       platte ? `je ${fmt(q.bf / 10, 0)} cm` : `${lay.lagen} Lage${lay.lagen > 1 ? "n" : ""} (${lay.proLage.join(" + ")} Stäbe)`);
     h += zeile("A<sub>s,vorh</sub> ≥ A<sub>s1</sub>", fmt(lay.As / 100), haken(lay.As + 1e-6 >= r.As1) + " cm²");
@@ -1123,6 +1251,7 @@ const BEREICHE = {
   statik: { titel: "Statik", sektion: "statik" },
   stahlbau: { titel: "Stahlbau", sektion: "stahlbau" },
   massivbau: { titel: "Massivbau", sektion: "stahlbeton" },
+  lasten: { titel: "Lastermittlung", sektion: "lasten" },
 };
 
 class App {
@@ -1130,6 +1259,7 @@ class App {
     this.statik = new StatikSeite();
     this.stahlbau = new StahlbauSeite();
     this.massivbau = new StahlbetonSeite();
+    this.lasten = new ErddruckSeite();
     this.info = new InfoPanel();
     // Navigation über die Adresse (#start, #stahlbau, #massivbau): funktioniert mit Zurück-Taste
     window.addEventListener("hashchange", () => this.ausAdresse());
@@ -1143,7 +1273,7 @@ class App {
     const b = BEREICHE[name];
     this.zeigeSeite(b.sektion, b.titel, `${b.titel} – Statik-Rechner`);
     // Zeichenflächen sind erst jetzt sichtbar und werden neu gezeichnet
-    ({ statik: this.statik, stahlbau: this.stahlbau, massivbau: this.massivbau })[name].zeige();
+    ({ statik: this.statik, stahlbau: this.stahlbau, massivbau: this.massivbau, lasten: this.lasten })[name].zeige();
   }
 
   zeigeSeite(sektion, titel, dokumentTitel) {

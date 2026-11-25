@@ -264,6 +264,39 @@ const INFO = {
       "Die Schubspannung τ wird weiterhin elastisch nach Jourawski berechnet.",
     normen: [`${EC3}, 5.4.3 (Plastisches Verfahren)`, `${EC3}, 5.5 (Klassifizierung)`, `${EC3}, 6.2.1 bis 6.2.10`],
   },
+  erddruck: {
+    titel: "Erddruck (Lastermittlung)",
+    formeln: [
+      "σ′<sub>v</sub>(z) = p + Σ γ<sub>i</sub>·Δz<sub>i</sub> (unter Grundwasser γ′)",
+      "aktiv: e<sub>ah</sub> = K<sub>agh</sub>·σ′<sub>v</sub> − 2·c′·√K<sub>agh</sub> ≥ 0",
+      "Ruhe: e<sub>0h</sub> = K<sub>0h</sub>·σ′<sub>v</sub>, K<sub>0h</sub> = (1 − sinφ′)·(1 + sinβ)",
+      "passiv: e<sub>ph</sub> = K<sub>pgh</sub>·σ′<sub>v</sub> + 2·c′·√K<sub>pgh</sub>",
+      "erhöht aktiv: e = 0,5·(e<sub>ah</sub> + e<sub>0h</sub>)",
+      "K<sub>agh</sub> = cos²φ′ / [1 + √(sin(φ′+δ)·sin(φ′−β)/(cosδ·cosβ))]²",
+      "K<sub>pgh</sub> = cos²φ′ / [1 − √(sin(φ′+δ)·sin(φ′+β)/(cosδ·cosβ))]²",
+      "E<sub>h</sub> = ∫ e<sub>h</sub> dz, E<sub>v</sub> = Σ E<sub>h,i</sub>·tanδ<sub>i</sub>, W = ½·γ<sub>w</sub>·h<sub>w</sub>²",
+    ],
+    text: "Lotrechte Wand, ebene Gleitfläche (Coulomb/Müller-Breslau), horizontale Komponente der Beiwerte; die Beiwerte lassen sich je Schicht überschreiben. Kohäsion wird vereinfacht über 2·c′·√K berücksichtigt; bei aktivem Druck wird der Erddruck nicht negativ. Der Faktor skaliert das Ergebnis (z. B. 0,5 für eine nur teilweise mobilisierte Größe). Die Auflast wirkt gleichmäßig auf der Geländeoberfläche. Nicht erfasst: geneigte Wand, Streifen-/Linienlasten, Mindesterddruck, Verdichtungserddruck, gekrümmte Gleitflächen beim passiven Druck, Erdbeben. Alle Werte sind charakteristisch (ohne Teilsicherheitsbeiwerte). Formeln und Grenzwerte vor Verwendung an DIN 4085 und EAB prüfen.",
+    normen: ["DIN 4085 (Baugrund – Berechnung des Erddrucks)", "DIN EN 1997-1 mit NA, Anhang C", "EAB (Empfehlungen des Arbeitskreises Baugruben)"],
+  },
+  erdSchicht: {
+    titel: "Bodenschichten",
+    formeln: ["γ feucht/über Grundwasser, γ′ = γ − γ<sub>w</sub> unter Grundwasser (leer: γ − 10)"],
+    text: "Je Schicht: Dicke d, Wichte γ, Wichte unter Auftrieb γ′, Reibungswinkel φ′, Kohäsion c′, Wandreibungswinkel δ (0 ≤ δ ≤ φ′; üblich aktiv 2/3·φ′, Ruhedruck und passiv oft 0). Wandreibung wird beim Ruhedruck und beim erhöhten aktiven Druck nicht angesetzt. Hinweis: Ein hoher Wandreibungswinkel bei passivem Erddruck ergibt mit ebener Gleitfläche zu große Beiwerte.",
+    normen: ["DIN 4085", "DIN 1055-2 (Bodenkennwerte, Anhaltswerte)"],
+  },
+  swFeder: {
+    titel: "Federlager und Bettung",
+    formeln: ["Knotenfeder: F = −c·u (c in kN/m, Richtungen X und Z)", "Bettung: q = −k·u (k in kN/m je m Stablänge, d. h. kN/m²)", "Systemlänge l<sub>e</sub> = (4·E·I/k)<sup>¼</sup>"],
+    text: "Federn an Knoten sind elastische Lager in globaler X- und Z-Richtung (kN/m). Die Bettung wirkt über die ganze Stablänge; „lokal“ bezieht k auf die Stabachsen (x′ längs, z′ quer), „global“ auf X und Z. Der Rechenkern teilt bettete Stäbe in kurze Abschnitte (Länge ≲ l<sub>e</sub>/4) und setzt Einzelfedern mit Einflusslänge an die Teilknoten (Winkler-Bettung, zugfest und druckfest – keine Abhebung). Federn und Bettung gelten als linear-elastisch; die Auflagerkräfte der Federn stehen in der Auflagertabelle, die Bettungskräfte als größte Werte je Stab unter den Extremwerten. Ein Bettungsmodul in kN/m³ wird mit der Stabbreite zu k in kN/m² (z. B. k<sub>s</sub> = 20 000 kN/m³ bei 0,5 m Breite → 10 000 kN/m²).",
+    normen: ["Winkler-Bettungsmodell (kein Normverfahren)"],
+  },
+  swQuerschnitt: {
+    titel: "Querschnitte und Material (Statik)",
+    formeln: ["EA und EI aus A, I und E: EA = E·A, EI = E·I<sub>y</sub>"],
+    text: "Jeder Stab verweist auf einen Querschnitt (Q1, Q2 …) mit Material oder wird „manuell“ mit A, I und dem globalen E-Modul definiert. A und I<sub>y</sub> (starke Achse) werden aus der Geometrie berechnet. E-Moduln: Baustahl 210 000, nichtrostender Stahl 200 000, Aluminium 70 000 N/mm²; Beton E<sub>cm</sub> nach EN 1992-1-1 Tab. 3.1 (C20/25: 30 000 bis C50/60: 37 000); Brettschichtholz E<sub>0,mean</sub> (GL24h 11 500, GL28h 12 600). Voute: Wird am Stabende ein anderer Querschnitt gewählt, werden die Maße linear zwischen Anfang und Ende interpoliert (gleicher Typ und gleiche Auswahlfelder bzw. gewalzte I-/H-Profile untereinander; gleicher E-Modul). Der Rechenkern zerlegt den Stab dazu in 24 Abschnitte mit je konstantem Querschnitt (harmonisches Mittel von A und I); die Ergebnisse werden wieder zu einem Stab zusammengefasst, Schubverformung bleibt unberücksichtigt. Kein Kriechen, keine Rissbildung (Stahlbeton: ungerissener Querschnitt mit E<sub>cm</sub>), keine Schubverformung; bei Verbund/Stahlbeton ist der Querschnitt Betonquerschnitt ohne Bewehrung.",
+    normen: ["DIN EN 1992-1-1, Tab. 3.1", "DIN EN 1993-1-1, 3.2.6", "DIN EN 1995-1-1 / EN 14080"],
+  },
   swEinwirkung: {
     titel: "Einwirkungen und Kombinationsbeiwerte",
     formeln: ["G ständig, Q veränderlich (Nutzlast, Schnee, Wind, Temperatur), A außergewöhnlich", "ψ₀ seltener Wert, ψ₁ häufiger Wert, ψ₂ quasi-ständiger Wert"],
@@ -569,6 +602,17 @@ const INFO = {
     ],
     text: "0 = so viele Stäbe je Lage, wie der Mindestabstand zulässt (gleichmäßig auf die Lagen verteilt). Der lichte Lagenabstand wird mit a<sub>min</sub> angesetzt. d<sub>1</sub> wird iterativ bestimmt, weil die Lagenzahl von A<sub>s1</sub> und A<sub>s1</sub> von d<sub>1</sub> abhängt.",
     normen: [`${EC2}, 8.2(2)`],
+  },
+  sbVerank: {
+    titel: "Verankerung und Übergreifung",
+    formeln: [
+      "f<sub>bd</sub> = 2,25·η<sub>1</sub>·η<sub>2</sub>·f<sub>ctd</sub>, f<sub>ctd</sub> = α<sub>ct</sub>·f<sub>ctk;0,05</sub>/γ<sub>c</sub> (α<sub>ct</sub> = 1,0)",
+      "l<sub>b,rqd</sub> = (Ø/4)·σ<sub>sd</sub>/f<sub>bd</sub>",
+      "l<sub>bd</sub> = α<sub>1</sub>·α<sub>2</sub>·α<sub>3</sub>·α<sub>4</sub>·α<sub>5</sub>·l<sub>b,rqd</sub> ≥ l<sub>b,min</sub>",
+      "l<sub>0</sub> = α<sub>1</sub>·α<sub>2</sub>·α<sub>3</sub>·α<sub>5</sub>·α<sub>6</sub>·l<sub>b,rqd</sub> ≥ l<sub>0,min</sub>, α<sub>6</sub> = √(ρ<sub>1</sub>/25), 1,0 ≤ α<sub>6</sub> ≤ 1,5",
+    ],
+    text: "Verbund gut (η<sub>1</sub> = 1,0): Stab 45°–90° geneigt, oder liegend bei Bauteilhöhe ≤ 250 mm bzw. in der unteren Bauteilhälfte oder ≥ 300 mm unter Oberkante; sonst mäßig (0,7). η<sub>2</sub> = 1,0 für Ø ≤ 32 mm. α<sub>1</sub>: Haken/Schlaufen 0,7 bei c<sub>d</sub> &gt; 3Ø (Zug); α<sub>2</sub> = 1 − 0,15·(c<sub>d</sub> − Ø)/Ø (gerade) bzw. (c<sub>d</sub> − 3Ø)/Ø (Haken), 0,7…1,0; α<sub>3</sub> = 1 − K·λ mit λ = (ΣA<sub>st</sub> − ΣA<sub>st,min</sub>)/A<sub>s</sub> (Verankerung 0,25·A<sub>s</sub>, Stoß 1,0·A<sub>s</sub>); α<sub>5</sub> = 1 − 0,04·p. Es gilt α<sub>2</sub>·α<sub>3</sub>·α<sub>5</sub> ≥ 0,7. Nicht erfasst: angeschweißte Querstäbe (α<sub>4</sub>), Schweißstöße, Mattenstöße, Ø &gt; 32 mm Sonderregeln, Außenrüttler-Sonderregel der Verbundbedingung. Vorbelegung von σ<sub>sd</sub> aus A<sub>s,erf</sub>/A<sub>s,vorh</sub> der Biegebemessung. Normwerte vor Verwendung prüfen.",
+    normen: ["DIN EN 1992-1-1, 8.4 und 8.7", "DIN EN 1992-1-1/NA (Verbundspannung α<sub>ct</sub> = 1,0)"],
   },
   sbDeckung: {
     titel: "Betondeckung c<sub>nom</sub>",

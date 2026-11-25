@@ -38,9 +38,44 @@
           <p>Biegebemessung nach EC 2 mit NA (DE) für Rechteck und Plattenbalken, mit Dehnungsebene und Spannungsverlauf.</p>
           <span class="los">Öffnen →</span>
         </a>
+        <a class="karte" href="#lasten">
+          <h3>Lastermittlung</h3>
+          <p>Erddruck auf eine Wand: Bodenschichten mit Wichte, Reibungswinkel, Kohäsion und Wandreibung, Grundwasser und Auflast; aktiver, erhöht aktiver, Ruhe- und passiver Erddruck mit grafischem Verlauf.</p>
+          <span class="los">Öffnen →</span>
+        </a>
       </div>
       <p class="hinweis">Hinter den Werten steht ein Symbol <button type="button" class="info" data-info="A">i</button> mit Berechnungsformel und Normverweis.
         Die Ergebnisse ersetzen keine geprüfte statische Berechnung.</p>
+    </section>
+
+    <!-- ===== Lastermittlung: Erddruck ===== -->
+    <section id="tab-lasten" class="seite">
+      <div class="eingabe">
+        <h2>Erddruck</h2>
+        <div class="raster">
+          <label style="grid-column:1 / -1"><span>Erddruckart</span>
+            <select id="ed-art">
+              <option value="aktiv">Aktiver Erddruck</option>
+              <option value="erhoeht">Erhöhter aktiver Erddruck (0,5·(aktiv + Ruhe))</option>
+              <option value="ruhe">Erdruhedruck</option>
+              <option value="passiv">Passiver Erddruck</option>
+            </select></label>
+          <label><span>Faktor auf den Erddruck [–] <button type="button" class="info" data-info="erddruck">i</button></span><input type="number" id="ed-faktor" value="1" min="0" step="any"></label>
+          <label><span>Geländeneigung β [°]</span><input type="number" id="ed-beta" value="0" min="0" step="any"></label>
+          <label><span>Auflast p [kN/m²]</span><input type="number" id="ed-p" value="0" min="0" step="any"></label>
+          <label><span>Grundwasser, Tiefe unter OK [m] (leer = keins)</span><input type="number" id="ed-gw" value="" min="0" step="any"></label>
+          <label class="cb" style="grid-column:1 / -1"><input type="checkbox" id="ed-wasser" checked> Wasserdruck zusätzlich ausweisen</label>
+        </div>
+        <h2>Bodenschichten (von oben nach unten) <button type="button" class="info" data-info="erdSchicht">i</button></h2>
+        <div id="ed-schichten"></div>
+        <button type="button" id="ed-beispiel">Beispiel laden</button>
+        <p class="hinweis">Die Wand reicht bis zur Unterkante der untersten Schicht. Beiwerte werden je Schicht aus φ′, δ und β berechnet; ein eingetragener Wert (unter „Erddruckbeiwerte“) ersetzt den berechneten.</p>
+      </div>
+      <div class="ergebnisse">
+        <canvas id="ed-canvas" style="height:420px"></canvas>
+        <p class="hinweis">Schichtenprofil links, Erddruckverlauf rechts (Wand in der Mitte). Mit der Maus über das Bild fahren bzw. tippen zeigt die Werte in der jeweiligen Tiefe.</p>
+        <div id="ed-ergebnis"></div>
+      </div>
     </section>
 
     <!-- ===== Stahlbau: alles auf einer Seite ===== -->
@@ -147,8 +182,12 @@
         <div class="sw-knopfzeile"><button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
         <h2>Knoten und Lager</h2><div id="sw-knoten"></div>
         <p class="hinweis">X nach rechts, Z nach unten (Meter). Angekreuzt = gehaltene Richtung (X, Z, Drehung φ): X+Z gelenkig, nur Z Rolle, X+Z+φ Einspannung.</p>
+        <h2>Federn an Knoten <button type="button" class="info" data-info="swFeder">i</button></h2><div id="sw-fed"></div>
+        <h2>Querschnitte und Material <button type="button" class="info" data-info="swQuerschnitt">i</button></h2><div id="sw-qs"></div>
         <h2>Stäbe</h2><div id="sw-staebe"></div>
-        <label><span>E-Modul [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
+        <p class="hinweis">Quersch. „manuell“: A und I selbst eingeben, E-Modul unten. Sonst werden A, I (um die starke Achse) und E aus Querschnitt und Material berechnet. „Ende“: anderer Querschnitt am Stabende → Stab linear gevoutet (A und I in der Tabelle gelten für den Anfang).</p>
+        <h2>Bettung der Stäbe <button type="button" class="info" data-info="swFeder">i</button></h2><div id="sw-bett"></div>
+        <label><span>E-Modul für Stäbe „manuell“ [N/mm²]</span><input type="number" id="sw-E" value="210000" step="any"></label>
         <h2>Einwirkungen <button type="button" class="info" data-info="swEinwirkung">i</button></h2><div id="sw-ew"></div>
         <p class="hinweis">Kategorie setzt die Kombinationsbeiwerte nach DIN EN 1990/NA vor; ψ-Werte sind änderbar. Jede Last wird in der Spalte „Einw." einer Einwirkung zugeordnet.</p>
         <h2>Knotenlasten</h2><div id="sw-kl"></div>
@@ -244,10 +283,24 @@
           <label><span>Größtkorn d<sub>g</sub> [mm]</span><select id="sb-dg"><option>8</option><option selected>16</option><option>32</option></select></label>
           <label><span>Vorhaltemaß Δc<sub>dev</sub> [mm] <button type="button" class="info" data-info="sbDeckung">i</button></span><input type="number" id="sb-dev" value="10" step="1"></label>
         </div>
+        <h2>Verankerung und Übergreifung <button type="button" class="info" data-info="sbVerank">i</button></h2>
+        <div class="raster">
+          <label><span>Stab beansprucht auf</span><select id="sb-v-art"><option value="zug">Zug</option><option value="druck">Druck</option></select></label>
+          <label><span>Ø [mm]</span><select id="sb-v-d"><option value="0">wie Zugbewehrung</option></select></label>
+          <label><span>Stabform</span><select id="sb-v-form"><option value="gerade">gerade Stabenden</option><option value="haken">Haken / Winkelhaken / Schlaufe</option></select></label>
+          <label><span>Verbundbedingung</span><select id="sb-v-vb"><option value="auto">automatisch (Lage im Bauteil)</option><option value="gut">gut</option><option value="maessig">mäßig</option></select></label>
+          <label><span>Ausnutzung A<sub>s,erf</sub>/A<sub>s,vorh</sub> [%] (0 = aus Bemessung)</span><input type="number" id="sb-v-ausn" value="0" min="0" step="1"></label>
+          <label><span>c<sub>d</sub> [mm] (0 = automatisch)</span><input type="number" id="sb-v-cd" value="0" min="0" step="1"></label>
+          <label><span>Querbewehrung ΣA<sub>st</sub> [cm²]</span><input type="number" id="sb-v-ast" value="0" min="0" step="any"></label>
+          <label><span>K (Lage der Querbewehrung)</span><select id="sb-v-K"><option value="0.1">0,10 (Bügel um Stab, innen)</option><option value="0.05">0,05</option><option value="0">0 (keine Wirkung)</option></select></label>
+          <label><span>Querdruck p [N/mm²]</span><input type="number" id="sb-v-p" value="0" min="0" step="any"></label>
+          <label><span>Gestoßene Stäbe im Schnitt</span><select id="sb-v-rho"><option value="25">≤ 25 %</option><option value="33">33 %</option><option value="50">50 %</option><option value="100">&gt; 50 %</option></select></label>
+        </div>
       </div>
 
       <div class="ergebnisse">
         <canvas id="sb-skizze" style="height:260px"></canvas>
+        <p id="sb-bar-info" class="hinweis">Stab antippen oder mit der Maus überfahren: Durchmesser, Lage und Abstände.</p>
         <p class="hinweis">Links: Querschnitt mit Druckzone (blau), Dehnungsnulllinie x (gestrichelt), Zugbewehrung (rot)
           und Druckbewehrung (dunkelblau). Mitte: Dehnungsebene, rechts: Spannungsverlauf mit Parabel-Rechteck-Diagramm
           (gestrichelt: Spannungsblock zum Vergleich), Druck links, Zug rechts.</p>
@@ -265,9 +318,12 @@
   <script src="tragfaehigkeit.js"></script>
   <script src="ansicht3d.js"></script>
   <script src="stahlbeton.js"></script>
+  <script src="statik-querschnitte.js"></script>
   <script src="stabwerk.js"></script>
   <script src="lastfaelle.js"></script>
   <script src="stabwerk-ui.js"></script>
+  <script src="erddruck.js"></script>
+  <script src="lasten-ui.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -101,3 +101,32 @@ St.-Venant-Torsion: Eingabe T [kNm] je Reiter, Kennwerte I_t/W_t (I, U, T, Hohlp
 - Kombinationen: GZT (6.10), außergewöhnlich (6.11b), GZG charakteristisch/häufig/quasi-ständig, unfaktoriert; Anzeige als Umhüllende oder Einzelkombination. Schnittgrößen, Auflager, Verformungen erfolgen im Design-Niveau.
 - Grad der statischen Unbestimmtheit n = 3s + r − 3k − g; Koordinatensystem oben links.
 - Vereinfachungen: lineare Superposition (I. Ordnung), kein Erdbeben/Ermüdung, bei mehr als drei ständigen Einwirkungen wirken diese gemeinsam. ψ-/γ-Werte vor Verwendung an der Norm prüfen.
+
+## Version 12: Statik – begrenzte Streckenlasten, Querschnitte und Material
+- Streckenlasten mit „von/bis“ (leer = bis Stabende), exakte Volleinspannkräfte (Gauß-Integration).
+- `statik-querschnitte.js` (neu): Querschnitte Q1, Q2 … (alle Typen der Querschnittsseiten inkl. Walzprofile) mit Material; A und I_y werden berechnet, E aus Materialtabelle (Stahl, Edelstahl, Alu, Beton E_cm, BSH) oder eigener Wert. Stäbe verweisen per Auswahl auf einen Querschnitt oder bleiben „manuell“.
+
+## Version 13: Massivbau – aufklappbare Ergebnisse, Verankerung/Übergreifung, interaktive Bewehrungsskizze
+- Ergebnisse in aufklappbaren Abschnitten (Expositionsklasse, Biegebemessung, Querkraft, Bewehrungswahl, Verankerung/Übergreifung); der Zustand bleibt bei Änderungen erhalten.
+- Neue Klasse `Verankerung` (stahlbeton.js): f_bd, l_b,rqd, l_bd, l_b,min, l_0, l_0,min mit α1–α3, α5, α6; Verbundbedingung automatisch oder wählbar.
+- Querschnittsskizze zeigt Stäbe und Bügel maßstäblich; Stab antippen/überfahren zeigt Ø, Lage und Abstände.
+
+## Version 14: Statik – Extremwerte und Mausabfrage
+- Schnittgrößenverläufe: Beschriftung von Stabenden und lokalen Extrema im Stabinneren (Feldmomente auch bei größerem Stützmoment, per Parabel verfeinert); globales Maximum/Minimum fett, mit Stab und Stelle im Hinweistext.
+- Überfahren (Maus) bzw. Antippen der Zustandslinien und der Verformungslinie zeigt die Werte an der Stelle (bei Umhüllenden Maximum und Minimum).
+
+## Version 15: Statik – gevoutete Stäbe
+- Stabtabelle: Spalte „Ende“ (Querschnitt am Stabende, „= Anfang“ = prismatisch). Maße werden linear interpoliert; `VouteQuerschnitt` (statik-querschnitte.js).
+- Rechenkern: Klasse `Voute` (stabwerk.js) zerlegt gevoutete Stäbe in 24 Abschnitte, verteilt Lasten und fasst Ergebnisse (Verlauf, Verformung, Extremwerte) wieder zusammen.
+
+## Version 16: Statik – Federlager und Bettung
+- „Federn an Knoten“ (c_x, c_z in kN/m) und „Bettung der Stäbe“ (k_x, k_z in kN/m², lokal oder global).
+- Rechenkern: Knotenfedern in der Steifigkeitsmatrix; Bettung durch Teilung der Stäbe (Abschnitt ≲ l_e/4, max. 160) mit Einzelfedern (Einflusslänge); Auflagerkräfte der Federn in der Tabelle, größte Bettungskraft je Stab unter den Extremwerten.
+- Layout: breitere Eingabespalte, kompaktere Tabellen auf dem Handy; util.js: keine „−0,0“-Ausgabe.
+
+## Version 17: Lastermittlung – Erddruck
+- Neuer Bereich „Lastermittlung“ (#lasten) mit `erddruck.js` (Klassen `Erddruckbeiwerte`, `Erddruck`) und `lasten-ui.js` (Seite, Schichtkarten, Zeichnung).
+- Schichtweise Eingabe (d, γ, γ′, φ′, c′, δ; Beiwerte K_agh, K_0h, K_pgh überschreibbar), Auflast, Geländeneigung, Grundwasser.
+- Erddruckarten: aktiv, erhöht aktiv (0,5·(aktiv + Ruhe)), Ruhedruck, passiv; Faktor auf das Ergebnis.
+- Ergebnis: E_h, E_v, Angriffshöhe, Wasserdruck, Tabelle je Abschnitt; Grafik mit Schichtenprofil und Erddruckverlauf, Werte beim Überfahren/Antippen.
+- Vereinfachungen: lotrechte Wand, Coulomb mit ebener Gleitfläche, Kohäsion über 2·c·√K, keine Teilsicherheitsbeiwerte.

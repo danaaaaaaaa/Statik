@@ -507,3 +507,60 @@ class Querkraftbemessung {
     return res;
   }
 }
+
+/* ======================= Verankerung und Übergreifung ======================= */
+
+/**
+ * Verankerungs- und Übergreifungslängen nach DIN EN 1992-1-1 mit NA (DE), Abschnitte 8.4 und 8.7.
+ *  - Verbundspannung f_bd = 2,25·η1·η2·f_ctd mit f_ctd = α_ct·f_ctk;0,05/γ_c, α_ct = 1,0 (NA DE, Verbundspannung)
+ *  - Grundmaß l_b,rqd = (Ø/4)·(σ_sd/f_bd)
+ *  - Bemessungswert l_bd = α1·α2·α3·α4·α5·l_b,rqd ≥ l_b,min, Übergreifung l_0 = α1·α2·α3·α5·α6·l_b,rqd ≥ l_0,min
+ * Intern: mm, N/mm².
+ */
+class Verankerung {
+  constructor(beton, stahl) { this.bt = beton; this.st = stahl; }
+
+  /** Bemessungswert der Betonzugfestigkeit für die Verbundspannung (f_ctk;0,05 = 0,7·f_ctm). */
+  get fctd() { return 1.0 * 0.7 * this.bt.fctm / GAMMA_C; }
+
+  /** Verbundspannung f_bd; gute Verbundbedingungen η1 = 1,0, mäßige 0,7; η2 = 1,0 (Ø ≤ 32) bzw. (132 − Ø)/100. */
+  fbd(gut, ds) {
+    const eta1 = gut ? 1.0 : 0.7, eta2 = ds <= 32 ? 1.0 : (132 - ds) / 100;
+    return { fbd: 2.25 * eta1 * eta2 * this.fctd, eta1, eta2 };
+  }
+
+  /**
+   * @param {{ds:number, zug:boolean, gerade:boolean, gut:boolean, cd:number, ausn:number, astSum:number, K:number, p:number, rho1:number}} p
+   *   ds [mm]; zug = Zugstab (sonst Druck); gerade = gerader Stab (sonst Haken/Winkelhaken/Schlaufe);
+   *   cd [mm] Betondeckungsmaß nach Bild 8.3; ausn = A_s,erf/A_s,vorh (σ_sd = ausn·f_yd);
+   *   astSum [mm²] = ΣA_st der Querbewehrung auf der Verankerungs-/Übergreifungslänge; K Beiwert nach Bild 8.4;
+   *   p [N/mm²] Querdruck; rho1 [%] Anteil gestoßener Stäbe im Schnitt
+   */
+  bemesse(p) {
+    const { ds, zug, gerade, cd } = p, As = Math.PI * ds * ds / 4;
+    const v = this.fbd(p.gut, ds), sigSd = p.ausn * this.st.fyd;
+    const lbRqd = ds / 4 * sigSd / v.fbd;
+    const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+
+    // Beiwerte nach Tab. 8.2 (Druck: alle 1,0)
+    const a1 = zug && !gerade && cd > 3 * ds ? 0.7 : 1.0;
+    const a2 = !zug ? 1.0 : clamp(1 - 0.15 * (cd - (gerade ? 1 : 3) * ds) / ds, 0.7, 1.0);
+    const a5 = !zug ? 1.0 : clamp(1 - 0.04 * p.p, 0.7, 1.0);
+    const alpha3 = astMin => !zug ? 1.0 : clamp(1 - p.K * (p.astSum - astMin * As) / As, 0.7, 1.0);
+    const a3v = alpha3(0.25), a3s = alpha3(1.0);           // Verankerung: ΣA_st,min = 0,25·A_s; Übergreifung: 1,0·A_s
+    const a6 = !zug ? 1.0 : clamp(Math.sqrt(p.rho1 / 25), 1.0, 1.5);
+    const prod = (a2v, a3v_) => (zug ? Math.max(0.7, a2v * a3v_ * a5) : 1.0);
+
+    // Verankerung
+    const lbd = a1 * prod(a2, a3v) * lbRqd;
+    const lbMin = Math.max((zug ? 0.3 : 0.6) * lbRqd, 10 * ds, 100);
+    // Übergreifung
+    const l0 = a1 * prod(a2, a3s) * a6 * lbRqd;
+    const l0Min = Math.max(0.3 * a6 * lbRqd, 15 * ds, 200);
+    return {
+      ds, As, sigSd, ...v, fctd: this.fctd, lbRqd, a1, a2, a3v, a3s, a5, a6,
+      lbd, lbMin, lbdMass: Math.max(lbd, lbMin), l0, l0Min, l0Mass: Math.max(l0, l0Min),
+      prodV: prod(a2, a3v), prodS: prod(a2, a3s),
+    };
+  }
+}
