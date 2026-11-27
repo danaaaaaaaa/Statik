@@ -224,7 +224,7 @@ class LastfallRechner {
     this.aktiv = new Set();
     const merk = (ew, wert) => { if (wert && ew >= 1 && ew <= nGruppen) this.aktiv.add(ew - 1); };
     modell.knotenlasten.forEach(l => merk(l.ew, l.Fx || l.Fz || l.M));
-    modell.strecken.forEach(l => merk(l.ew, l.q));
+    modell.strecken.forEach(l => merk(l.ew, l.q || l.q2));
     modell.einzel.forEach(l => merk(l.ew, l.F));
     this.einzeln = [];
     for (let g = 0; g < nGruppen; g++) this.einzeln.push(this.aktiv.has(g) ? new Stabwerk(this._modell(g)).berechne() : null);
@@ -239,7 +239,7 @@ class LastfallRechner {
     return {
       ...m,
       knotenlasten: m.knotenlasten.map(l => ({ ...l, Fx: l.Fx * an(l), Fz: l.Fz * an(l), M: l.M * an(l) })),
-      strecken: m.strecken.map(l => ({ ...l, q: l.q * an(l) })),
+      strecken: m.strecken.map(l => ({ ...l, q: l.q * an(l), q2: Number.isFinite(l.q2) ? l.q2 * an(l) : l.q2 })),
       einzel: m.einzel.map(l => ({ ...l, F: l.F * an(l) })),
     };
   }

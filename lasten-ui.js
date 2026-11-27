@@ -266,7 +266,7 @@ class ErddruckSeite {
     const bei = () => this.aktualisiere();
     this.linien = new ZeilenListe(document.getElementById("ed-linien"), [{ k: "Q", label: "Q [kN/m]", wert: 50 }, { k: "a", label: "Abstand a [m]", wert: 1.5 }], "+ Linienlast", bei);
     this.streifen = new ZeilenListe(document.getElementById("ed-streifen"), [{ k: "q", label: "q [kN/m²]", wert: 20 }, { k: "a", label: "Abstand a [m]", wert: 1 }, { k: "b", label: "Breite b [m]", wert: 2 }], "+ Streifenlast", bei);
-    ["ed-art", "ed-faktor", "ed-beta", "ed-alpha", "ed-p", "ed-gw", "ed-wasser", "ed-phimin", "ed-verd", "ed-delta", "ed-gleit", "ed-mobs", "ed-mobsb"].forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
+    ["ed-art", "ed-faktor", "ed-beta", "ed-alpha", "ed-p", "ed-gw", "ed-wasser", "ed-phimin", "ed-verd", "ed-delta", "ed-gleit", "ed-mobs", "ed-mobsb", "ed-wand", "ed-paf", "ed-dichte"].forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
     document.getElementById("ed-beispiel").addEventListener("click", () => { this.lade(ErddruckSeite.BEISPIEL()); this.aktualisiere(); });
     window.addEventListener("resize", () => { if (document.getElementById("tab-lasten").classList.contains("aktiv")) this.aktualisiere(); });
     // Speicherplätze (benennbar); der frühere Einzelspeicher wird als Startwert übernommen
@@ -281,10 +281,15 @@ class ErddruckSeite {
     this.verlauf = new Verlauf({
       holen: () => JSON.stringify(this.modell()),
       setzen: t => { this.lade(JSON.parse(t)); this.aktualisiere(); },
-      undo: document.getElementById("ed-undo"), redo: document.getElementById("ed-redo"),
     });
     this.aktualisiere();
   }
+
+  /** Wandbewegungsarten je Erddruckart; die erste ist der Normalfall (aktiv: Drehung um den Fuß, passiv: Parallelverschiebung) */
+  static WAND = {
+    aktiv: [["a", "a) Drehung um den Wandfuß (Dreieck)"], ["b", "b) Parallelverschiebung"], ["c", "c) Drehung um den Wandkopf"], ["d", "d) Durchbiegung"]],
+    passiv: [["b", "b) Parallelverschiebung (Normalfall)"], ["a", "a) Drehung um den Wandfuß"], ["c", "c) Drehung um den Wandkopf"]],
+  };
 
   static BEISPIEL() {
     return {
@@ -308,6 +313,9 @@ class ErddruckSeite {
     document.getElementById("ed-verd").value = m.verd || "";
     document.getElementById("ed-delta").value = Number.isFinite(m.deltaAnteil) ? Object.keys(DELTA_ANTEILE).find(k => DELTA_ANTEILE[k] === m.deltaAnteil) || "manuell" : "manuell";
     document.getElementById("ed-gleit").value = m.gleit || "eben";
+    this._wandOptionen(m.art, m.wand);
+    document.getElementById("ed-paf").value = Number.isFinite(m.paf) ? m.paf : 0.5;
+    document.getElementById("ed-dichte").value = Number.isFinite(m.dichte) ? m.dichte : "";
     document.getElementById("ed-mobs").value = Number.isFinite(m.mobS) ? m.mobS : "";
     document.getElementById("ed-mobsb").value = Number.isFinite(m.mobSb) ? m.mobSb : 10;
     this.linien.setze(m.linien || []); this.streifen.setze(m.streifen || []);
@@ -321,13 +329,26 @@ class ErddruckSeite {
       gw: v("ed-gw"), wasser: document.getElementById("ed-wasser").checked, schichten: this.schichten.liste,
       alpha: v("ed-alpha") || 0, phimin: v("ed-phimin"), verd: v("ed-verd") || 0,
       deltaAnteil: DELTA_ANTEILE[document.getElementById("ed-delta").value], gleit: document.getElementById("ed-gleit").value,
-      mobS: v("ed-mobs"), mobSb: v("ed-mobsb"), linien: this.linien.liste, streifen: this.streifen.liste,
+      mobS: v("ed-mobs"), mobSb: v("ed-mobsb"), wand: document.getElementById("ed-wand").value, paf: v("ed-paf"), dichte: v("ed-dichte"), linien: this.linien.liste, streifen: this.streifen.liste,
     };
   }
 
-  zeige() { this.aktualisiere(); }
+  zeige() { Kopfleiste.setze(this.verlauf); this.aktualisiere(); }
+
+  /** Auswahl der Wandbewegungsart je Erddruckart (aktiv: Tab. C.1, passiv: Tab. D.1); bei Ruhedruck/erhöht ausgeblendet. */
+  _wandOptionen(art, wahl) {
+    const sel = document.getElementById("ed-wand"), liste = ErddruckSeite.WAND[art];
+    document.getElementById("ed-wand-label").hidden = !liste;
+    if (!liste) { sel.innerHTML = ""; document.getElementById("ed-paf-label").hidden = true; return; }
+    if (sel.dataset.art !== art || sel.options.length !== liste.length) {
+      sel.innerHTML = liste.map(([k, t]) => `<option value="${k}">${t}</option>`).join(""); sel.dataset.art = art;
+    }
+    sel.value = liste.some(([k]) => k === wahl) ? wahl : liste[0][0];
+    document.getElementById("ed-paf-label").hidden = !(art === "passiv" && sel.value === "a");
+  }
 
   aktualisiere() {
+    this._wandOptionen(document.getElementById("ed-art").value, document.getElementById("ed-wand").value);
     const m = this.modell(), box = document.getElementById("ed-ergebnis");
     if (this.speicher) this.speicher.sichern();
     const rechner = new Erddruck(m), erg = rechner.berechne();

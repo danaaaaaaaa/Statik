@@ -1261,15 +1261,18 @@ const BEREICHE = {
   statik: { titel: "Statik", sektion: "statik" },
   stahlbau: { titel: "Stahlbau", sektion: "stahlbau" },
   massivbau: { titel: "Massivbau", sektion: "stahlbeton" },
-  lasten: { titel: "Lastermittlung", sektion: "lasten" },
+  lasten: { titel: "Lastermittlung › Erddruck", sektion: "lasten" },
+  wind: { titel: "Lastermittlung › Wind", sektion: "wind" },
 };
 
 class App {
   constructor() {
+    Kopfleiste.init();
     this.statik = new StatikSeite();
     this.stahlbau = new StahlbauSeite();
     this.massivbau = new StahlbetonSeite();
     this.lasten = new ErddruckSeite();
+    this.wind = new WindSeite();
     this.info = new InfoPanel();
     // verschiebbare Spaltentrenner zwischen Eingabe und Ergebnissen
     document.querySelectorAll("section.seite").forEach(sec => new Spaltentrenner(sec));
@@ -1281,11 +1284,12 @@ class App {
   /** Bereich aus dem URL-Fragment lesen und anzeigen (Standard: Startseite). */
   ausAdresse() {
     const name = location.hash.replace("#", "");
+    Kopfleiste.setze(null);                                  // Seiten ohne Verlauf: Pfeile ausblenden (zeige() setzt sie wieder)
     if (!BEREICHE[name]) { this.zeigeSeite("start", "", "Statik-Rechner"); return; }
     const b = BEREICHE[name];
     this.zeigeSeite(b.sektion, b.titel, `${b.titel} – Statik-Rechner`);
     // Zeichenflächen sind erst jetzt sichtbar und werden neu gezeichnet
-    ({ statik: this.statik, stahlbau: this.stahlbau, massivbau: this.massivbau, lasten: this.lasten })[name].zeige();
+    ({ statik: this.statik, stahlbau: this.stahlbau, massivbau: this.massivbau, lasten: this.lasten, wind: this.wind })[name].zeige();
   }
 
   zeigeSeite(sektion, titel, dokumentTitel) {

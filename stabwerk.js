@@ -56,7 +56,7 @@ class StabElement {
     this.EI = E * s.I * 1e-5;           // N/mm² · cm⁴ -> kNm²
     this.gelAnfang = s.gel === "anfang" || s.gel === "beide";
     this.gelEnde = s.gel === "ende" || s.gel === "beide";
-    this.strecken = [];                 // {qx, qz, a, b} lokal [kN/m], belastet von a bis b [m]
+    this.strecken = [];                 // {qx, qz, qx2, qz2, a, b} lokal [kN/m], belastet von a bis b [m]; Wert q bei a, q2 bei b (linear)
     this.einzel = [];                   // {a, Px, Pz} lokal [m, kN]
   }
 
@@ -67,8 +67,11 @@ class StabElement {
     if (richtung === "Z" || richtung === "Zproj") { const k = richtung === "Zproj" ? Math.abs(c) : 1; return { x: w * k * s, z: w * k * c }; }
     return { x: w * c, z: -w * s };     // "X"
   }
-  /** Gleichstreckenlast von a bis b (ohne Angabe: ganzer Stab). */
-  addStrecke(q, richtung, a = 0, b = this.L) { const v = this._lokal(richtung, q); this.strecken.push({ qx: v.x, qz: v.z, a, b }); }
+  /** Streckenlast von a bis b (ohne Angabe: ganzer Stab); q bei a, q2 bei b (ohne Angabe: konstant), dazwischen linear. */
+  addStrecke(q, richtung, a = 0, b = this.L, q2 = q) {
+    const v = this._lokal(richtung, q), w = this._lokal(richtung, Number.isFinite(q2) ? q2 : q);
+    this.strecken.push({ qx: v.x, qz: v.z, qx2: w.x, qz2: w.z, a, b });
+  }
   addEinzel(F, a, richtung) { const v = this._lokal(richtung === "Zproj" ? "Z" : richtung, F); this.einzel.push({ a, Px: v.x, Pz: v.z }); }
 
   /** Lokale 6×6-Steifigkeitsmatrix [u_i, w_i, θ_i, u_j, w_j, θ_j] (Euler-Bernoulli). */
@@ -89,10 +92,11 @@ class StabElement {
     const L = this.L, f = [0, 0, 0, 0, 0, 0];
     // Teilstreckenlast: Integration der Einzellast-Formeln (Polynome bis Grad 3) mit 3-Punkt-Gauß, exakt
     const GP = [[-Math.sqrt(0.6), 5 / 9], [0, 8 / 9], [Math.sqrt(0.6), 5 / 9]];
-    for (const { qx, qz, a, b } of this.strecken) {
+    for (const { qx: qx1, qz: qz1, qx2, qz2, a, b } of this.strecken) {
       const h = (b - a) / 2, m = (a + b) / 2;
       for (const [t, wg] of GP) {
         const x = m + h * t, d = L - x, dx = wg * h;         // dx = Gewicht · Länge des Bereichs
+        const r = (x - a) / (b - a), qx = qx1 + (qx2 - qx1) * r, qz = qz1 + (qz2 - qz1) * r;   // linear veränderliche Last an der Stelle x
         f[0] -= qx * d / L * dx; f[3] -= qx * x / L * dx;
         f[1] -= qz * d * d * (3 * x + d) / L ** 3 * dx; f[4] -= qz * x * x * (x + 3 * d) / L ** 3 * dx;
         f[2] -= qz * x * d * d / (L * L) * dx;          f[5] += qz * x * x * d / (L * L) * dx;
@@ -161,9 +165,13 @@ class StabElement {
     const [Ni, Vi, Mi] = this.fl;
     let N = Ni, V = Vi, M = Mi;          // N und V hier zunächst als Summe der Kräfte links vom Schnitt
     let Fx = Ni, Fz = Vi, Mm = Mi;
-    for (const { qx, qz, a, b } of this.strecken) {
+    for (const { qx, qz, qx2, qz2, a, b } of this.strecken) {
       const l = Math.max(0, Math.min(x, b) - a);          // belastete Länge links vom Schnitt
-      Fx += qx * l; Fz += qz * l; Mm -= qz * l * (x - a - l / 2);
+      if (l <= 0) continue;
+      const r = l / (b - a), ex = qx + (qx2 - qx) * r, ez = qz + (qz2 - qz) * r;     // Lastwerte am Ende des Teilstücks
+      // Trapez: Resultierende (q1+qe)/2·l; Moment um den Schnitt = (x−a)·F − l²·(q1+2·qe)/6
+      Fx += (qx + ex) / 2 * l; Fz += (qz + ez) / 2 * l;
+      Mm -= (x - a) * (qz + ez) / 2 * l - l * l * (qz + 2 * ez) / 6;
     }
     Mm -= Vi * x;
     for (const { a, Px, Pz } of this.einzel) {
@@ -278,6 +286,7 @@ class Stabwerk {
     for (const [n, l] of m.strecken.entries()) {
       if (!ganz(l.s, nS)) return `Streckenlast ${n + 1}: Stabnummer ungültig.`;
       if (!ok(l.q)) return `Streckenlast ${n + 1}: Wert unvollständig.`;
+      if (l.q2 !== undefined && l.q2 !== null && !Number.isNaN(l.q2) && !ok(l.q2)) return `Streckenlast ${n + 1}: Endwert ungültig.`;
       const st = m.staebe[l.s - 1], p = m.knoten[st.i - 1], r = m.knoten[st.j - 1], L = Math.hypot(r.x - p.x, r.z - p.z);
       const a = Number.isFinite(l.a) ? l.a : 0, b = Number.isFinite(l.b) ? l.b : L;
       if (a < 0 || b > L + 1e-9 || b <= a) return `Streckenlast ${n + 1}: es muss 0 ≤ von < bis ≤ ${L.toFixed(2)} m (Stablänge) gelten.`;
@@ -308,7 +317,7 @@ class Stabwerk {
     const els = m.staebe.map((s, nr) => new StabElement(s, m.knoten, s.E > 0 ? s.E : m.E, nr));
     for (const l of m.strecken) {
       const e = els[l.s - 1];
-      e.addStrecke(l.q, l.richtung, Number.isFinite(l.a) ? l.a : 0, Number.isFinite(l.b) ? Math.min(l.b, e.L) : e.L);
+      e.addStrecke(l.q, l.richtung, Number.isFinite(l.a) ? l.a : 0, Number.isFinite(l.b) ? Math.min(l.b, e.L) : e.L, l.q2);
     }
     for (const l of m.einzel) els[l.s - 1].addEinzel(l.F, Math.min(l.a, els[l.s - 1].L), l.richtung);
 
@@ -371,7 +380,7 @@ class Stabwerk {
     // Gleichgewichtskontrolle der Lasten (global, ohne Momente)
     let sx = 0, sz = 0;
     for (const l of m.knotenlasten) { sx += l.Fx; sz += l.Fz; }
-    for (const e of els) { for (const q of e.strecken) { const ll = q.b - q.a; sx += (q.qx * e.c - q.qz * e.s) * ll; sz += (q.qx * e.s + q.qz * e.c) * ll; }
+    for (const e of els) { for (const q of e.strecken) { const ll = q.b - q.a, mx = (q.qx + q.qx2) / 2, mz = (q.qz + q.qz2) / 2; sx += (mx * e.c - mz * e.s) * ll; sz += (mx * e.s + mz * e.c) * ll; }
       for (const p of e.einzel) { sx += p.Px * e.c - p.Pz * e.s; sz += p.Px * e.s + p.Pz * e.c; } }
     const rx = reaktionen.reduce((a, r) => a + r.Rx, 0), rz = reaktionen.reduce((a, r) => a + r.Rz, 0);
 
@@ -450,7 +459,11 @@ class Voute {
       const o = abb[l.s - 1], h = o.L / o.anzahl, a = Number.isFinite(l.a) ? l.a : 0, b = Number.isFinite(l.b) ? Math.min(l.b, o.L) : o.L;
       for (let k = 0; k < o.anzahl; k++) {
         const a0 = Math.max(a, k * h), b0 = Math.min(b, (k + 1) * h);
-        if (b0 - a0 > 1e-9) strecken.push({ ...l, s: o.erster + k + 1, a: a0 - k * h, b: b0 - k * h });
+        if (b0 - a0 > 1e-9) {
+          // veränderliche Last: Werte an den Teilgrenzen interpolieren
+          const q2 = Number.isFinite(l.q2) ? l.q2 : l.q, f = x => l.q + (q2 - l.q) * (x - a) / (b - a);
+          strecken.push({ ...l, q: f(a0), q2: f(b0), s: o.erster + k + 1, a: a0 - k * h, b: b0 - k * h });
+        }
       }
     }
     for (const l of m.einzel) {

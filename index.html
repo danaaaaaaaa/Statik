@@ -15,6 +15,10 @@
   <header>
     <h1><a href="#start" id="home" title="Zur Startseite">Statik-Rechner</a></h1>
     <span id="bereich-titel"></span>
+    <span class="kopf-verlauf" id="kopf-verlauf" hidden>
+      <button type="button" id="kopf-undo" title="Rückgängig" aria-label="Rückgängig" disabled>↶</button>
+      <button type="button" id="kopf-redo" title="Wiederherstellen" aria-label="Wiederherstellen" disabled>↷</button>
+    </span>
   </header>
 
   <main>
@@ -40,7 +44,7 @@
         </a>
         <a class="karte" href="#lasten">
           <h3>Lastermittlung</h3>
-          <p>Erddruck auf eine Wand: Bodenschichten mit Wichte, Reibungswinkel, Kohäsion und Wandreibung, Grundwasser und Auflast; aktiver, erhöht aktiver, Ruhe- und passiver Erddruck mit grafischem Verlauf.</p>
+          <p>Erddruck und Wind. Erddruck auf eine Wand: Bodenschichten mit Wichte, Reibungswinkel, Kohäsion und Wandreibung, Grundwasser und Auflast; aktiver, erhöht aktiver, Ruhe- und passiver Erddruck mit grafischem Verlauf. Windlasten nach EC 1-4 mit NA (DE): Geschwindigkeitsdruck, Wand- und Flachdachzonen.</p>
           <span class="los">Öffnen →</span>
         </a>
       </div>
@@ -51,6 +55,8 @@
     <!-- ===== Lastermittlung: Erddruck ===== -->
     <section id="tab-lasten" class="seite">
       <div class="eingabe">
+        <nav class="unternav"><a href="#lasten" class="aktiv">Erddruck</a><a href="#wind" class="">Wind</a></nav>
+        <div class="slots-block"><span class="slotname">Speicherplätze (benennbar)</span><div id="ed-slots"></div></div>
         <h2>Erddruck</h2>
         <div class="raster">
           <label style="grid-column:1 / -1"><span>Erddruckart</span>
@@ -60,6 +66,8 @@
               <option value="ruhe">Erdruhedruck</option>
               <option value="passiv">Passiver Erddruck</option>
             </select></label>
+          <label id="ed-wand-label"><span>Art der Wandbewegung <button type="button" class="info" data-info="erdWand">i</button></span><select id="ed-wand"></select></label>
+          <label id="ed-paf-label" hidden><span>E<sub>p</sub><sup>a</sup>/E<sub>p</sub><sup>b</sup> (0,5 … 0,667)</span><input type="number" id="ed-paf" value="0.5" min="0.5" max="0.667" step="any"></label>
           <label><span>Faktor auf den Erddruck [–] <button type="button" class="info" data-info="erddruck">i</button></span><input type="number" id="ed-faktor" value="1" min="0" step="any"></label>
           <label><span>Geländeneigung β [°]</span><input type="number" id="ed-beta" value="0" min="0" step="any"></label>
           <label><span>Wandneigung α [°] (+ = Kopf vom Boden weg)</span><input type="number" id="ed-alpha" value="0" step="any"></label>
@@ -74,7 +82,8 @@
         </div>
         <h2>Passiver Erddruck <button type="button" class="info" data-info="erdPassiv">i</button></h2>
         <div class="raster">
-          <label><span>Gleitfläche</span><select id="ed-gleit"><option value="eben">eben (Coulomb)</option><option value="gekruemmt">gekrümmt (Log-Spirale)</option></select></label>
+          <label><span>Gleitfläche</span><select id="ed-gleit"><option value="eben">eben (Coulomb)</option><option value="gekruemmt">gekrümmt (Pregl/Sokolowski)</option></select></label>
+          <label><span>Lagerungsdichte D [–] (0,3…1; für s<sub>p</sub>/h nach Tab. D.1)</span><input type="number" id="ed-dichte" value="" min="0" max="1" step="any"></label>
           <label><span>Verschiebung s [cm] (leer = voll mobilisiert)</span><input type="number" id="ed-mobs" value="" min="0" step="any"></label>
           <label><span>Bruchverschiebung s<sub>B</sub> [% von H]</span><input type="number" id="ed-mobsb" value="10" min="0" step="any"></label>
         </div>
@@ -84,9 +93,7 @@
         <div id="ed-streifen"></div>
         <h2>Bodenschichten (von oben nach unten) <button type="button" class="info" data-info="erdSchicht">i</button></h2>
         <div id="ed-schichten"></div>
-        <div class="slots-block"><span class="slotname">Speicherplätze (benennbar)</span><div id="ed-slots"></div></div>
-        <div class="sw-knopfzeile"><button type="button" id="ed-undo" disabled>↶ Rückgängig</button><button type="button" id="ed-redo" disabled>↷ Wiederherstellen</button>
-          <button type="button" id="ed-beispiel">Beispiel laden</button></div>
+        <button type="button" id="ed-beispiel">Beispiel laden</button>
         <p class="hinweis">Die Wand reicht bis zur Unterkante der untersten Schicht. Beiwerte werden je Schicht aus φ′, δ und β berechnet; ein eingetragener Wert (unter „Erddruckbeiwerte“) ersetzt den berechneten.</p>
       </div>
       <div class="ergebnisse">
@@ -96,11 +103,54 @@
       </div>
     </section>
 
+    <!-- ===== Lastermittlung: Wind ===== -->
+    <section id="tab-wind" class="seite">
+      <div class="eingabe">
+        <nav class="unternav"><a href="#lasten" class="">Erddruck</a><a href="#wind" class="aktiv">Wind</a></nav>
+        <div class="slots-block"><span class="slotname">Speicherplätze (benennbar)</span><div id="wi-slots"></div></div>
+        <h2>Windlasten nach DIN EN 1991-1-4 mit NA (DE) <button type="button" class="info" data-info="windQp">i</button></h2>
+        <div class="raster">
+          <label><span>Windzone</span><select id="wi-zone"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+          <label><span>Standort über NN [m]</span><input type="number" id="wi-nn" value="0" min="0" step="any"></label>
+          <label style="grid-column:1 / -1"><span>Geländeprofil</span>
+            <select id="wi-gel">
+              <option value="binnen">Binnenland (Mischprofil II–III)</option>
+              <option value="kueste">Küste / Inseln der Ostsee (Mischprofil)</option>
+              <option value="nordsee">Inseln der Nordsee (nur Zone 4)</option>
+              <option value="I">Geländekategorie I</option><option value="II">Geländekategorie II</option>
+              <option value="III">Geländekategorie III</option><option value="IV">Geländekategorie IV</option>
+            </select></label>
+          <label style="grid-column:1 / -1"><span>Verfahren</span>
+            <select id="wi-verf"><option value="genau">genau (Profilformeln, Höhenstaffelung)</option><option value="einfach">vereinfacht (Tab. NA.B.3, h ≤ 25 m)</option></select></label>
+          <label><span>q<sub>p</sub> zusätzlich in Höhe z [m]</span><input type="number" id="wi-z" value="10" min="0" step="any"></label>
+        </div>
+        <h2>Gebäude (rechteckiger Grundriss) <button type="button" class="info" data-info="windWand">i</button></h2>
+        <div class="raster">
+          <label><span>Höhe h [m]</span><input type="number" id="wi-h" value="12" min="0" step="any"></label>
+          <label><span>Breite b quer zum Wind [m]</span><input type="number" id="wi-b" value="20" min="0" step="any"></label>
+          <label><span>Tiefe d in Windrichtung [m]</span><input type="number" id="wi-d" value="10" min="0" step="any"></label>
+          <label><span>Dach <button type="button" class="info" data-info="windDach">i</button></span>
+            <select id="wi-dach"><option value="keins">kein Dach (nur Wände)</option><option value="flach">Flachdach, scharfkantig</option><option value="attika">Flachdach mit Attika</option></select></label>
+          <label id="wi-hp-label" hidden><span>Attikahöhe h<sub>p</sub> [m]</span><input type="number" id="wi-hp" value="0.5" min="0" step="any"></label>
+          <label class="cb" style="grid-column:1 / -1"><input type="checkbox" id="wi-innen" checked> Innendruck berücksichtigen (c<sub>pi</sub> = +0,2 / −0,3)</label>
+        </div>
+        <button type="button" id="wi-beispiel">Beispiel laden</button>
+        <p class="hinweis">Für Wind in der anderen Richtung b und d tauschen. Werte sind Charakteristische Windlasten (ohne Teilsicherheitsbeiwert).</p>
+      </div>
+      <div class="ergebnisse">
+        <canvas id="wi-profil" style="height:260px"></canvas>
+        <p class="hinweis">Böengeschwindigkeitsdruck über der Höhe (blau); orange: für die Luvwand D angesetzte Höhenstaffelung.</p>
+        <canvas id="wi-plan" style="height:260px"></canvas>
+        <p class="hinweis">Grundriss: Wandzonen A–E als farbige Kanten, Dachzonen F–I als Flächen; Wind von links.</p>
+        <div id="wi-ergebnis"></div>
+      </div>
+    </section>
+
     <!-- ===== Stahlbau: alles auf einer Seite ===== -->
     <section id="tab-stahlbau" class="seite">
       <div class="eingabe">
-        <h2>Querschnitt</h2>
         <div class="slots-block"><span class="slotname">Reiter (benennbar)</span><div id="st-slots"></div></div>
+        <h2>Querschnitt</h2>
         <label><span>Form</span><select id="st-typ"></select></label>
         <div id="st-felder" class="raster"></div>
 
@@ -215,8 +265,7 @@
     <section id="tab-statik" class="seite">
       <div class="eingabe">
         <div class="slots-block"><span class="slotname">Speicherplätze für Berechnungen (benennbar)</span><div id="sw-slots"></div></div>
-        <div class="sw-knopfzeile"><button type="button" id="sw-undo" disabled>↶ Rückgängig</button><button type="button" id="sw-redo" disabled>↷ Wiederherstellen</button>
-          <button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
+        <div class="sw-knopfzeile"><button type="button" id="sw-beispiel">Beispiel laden</button><button type="button" id="sw-leer">Leeres System</button></div>
         <h2>Knoten und Lager</h2><div id="sw-knoten"></div>
         <p class="hinweis">X nach rechts, Z nach unten (Meter). Angekreuzt = gehaltene Richtung (X, Z, Drehung φ): X+Z gelenkig, nur Z Rolle, X+Z+φ Einspannung.</p>
         <h2>Federn an Knoten <button type="button" class="info" data-info="swFeder">i</button></h2><div id="sw-fed"></div>
@@ -382,6 +431,7 @@
   <script src="stabwerk-ui.js"></script>
   <script src="erddruck.js"></script>
   <script src="lasten-ui.js"></script>
+  <script src="wind.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

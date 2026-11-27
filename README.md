@@ -135,3 +135,13 @@ St.-Venant-Torsion: Eingabe T [kNm] je Reiter, Kennwerte I_t/W_t (I, U, T, Hohlp
 - Erddruck: Wandneigung α (+ = Wandkopf vom Boden weg), Mindesterddruck (Vergleich mit φ′min, c′ = 0), Verdichtungserddruck nach Ingold, Linien- und Streifenlasten (Gleitflächenverfahren, Rechteck- bzw. Integralverteilung), δ als Anteil von φ′ (0, ⅓, ½, ⅔, 1), passiv mit gekrümmter Gleitfläche (Log-Spirale, Lancellotta) und mobilisiertem Erdwiderstand (Parabelansatz, NICHT die Originalfunktion nach Vogt). Beiwerte K_agh/K_pgh mit α gegen ein Keilgleichgewicht geprüft.
 - Statik: Lasten maßstäblich (Pfeillänge ∝ Last, Maßstab unten links); automatisches Eigengewicht (Wichte je Material, Einwirkung G1, grau dargestellt); 6 benennbare Speicherplätze (`slots.js`, `SlotLeiste`), auch für die Reiter im Stahlbau; Übernahme von N, V, M in Stahlbau/Massivbau; Rückgängig/Wiederherstellen (`verlauf.js`, auch im Erddruck).
 - Layout: verschiebbarer Trenner zwischen Eingabe und Ergebnissen (`trenner.js`, Doppelklick = zurücksetzen, Breite wird gemerkt).
+
+## Version 19: Veränderliche Streckenlasten (Statik)
+- Streckenlasten sind linear veränderlich (Trapez/Dreieck): Spalte „q Ende“ (leer = konstant), q gilt am Anfang „von“, q Ende am Ende „bis“. Wirkt in allen Richtungen (Z, Zproj, X, lokal) und in den Kombinationen.
+- Voute: Das automatische Eigengewicht verläuft linear von A_Anfang·γ bis A_Ende·γ (statt Mittelwert); gevoutete Stäbe werden die Last je Teilstab interpoliert.
+- Kern: `StabElement.addStrecke(q, richtung, a, b, q2)`, `_f0Lokal` (Gauss), `schnitt` (Trapez-Resultierende), Gleichgewichtsprüfung; Test: Dreieckslast Auflager qL/6, qL/3 und Mmax = qL²/(9√3), Trapez mit Voute-Zerlegung identisch.
+
+## Version 20: Windlasten, Pregl/Sokolowski
+- Lastermittlung › Wind (wind.js): q_p(z) nach EC 1-4/NA DE (Windzonen 1–4, Mischprofile, Kategorien, vereinfachtes Verfahren), Wandzonen A–E mit Staffelung, Flachdach F–I, Innendruck, Grundriss/Profil-Skizze.
+- Passiver Erddruck: gekrümmte Gleitflächen nach Pregl/Sokolowski (DIN 4085:2017 Gl. 41–43, Tab. 3) mit K_pgh, K_pph, K_pch, gültig auch für α ≠ 0 und β ≠ 0 (ersetzt die Log-Spirale).
+- Erddruck: Art der Wandbewegung (DIN 4085:2017 Tab. C.1 aktiv: a–d mit Umlagerung bei gleicher Kraft; Tab. D.1 passiv: a–c mit Kraftabminderung).

@@ -199,14 +199,14 @@ h3.unter { font-size: .95rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid v
 #tab-statik .eingabe > div[id^="sw-"] { overflow-x: auto; }   /* Notfall: sehr breite Tabellen scrollen statt abgeschnitten zu werden */
 
 /* ---- Lastermittlung ---- */
-#tab-lasten.aktiv { grid-template-columns: var(--links, clamp(340px, 38vw, 520px)) 10px minmax(0, 1fr); }
-@media (max-width: 820px) { #tab-lasten.aktiv { grid-template-columns: 1fr !important; } }
-#ed-canvas { width: 100%; background: #fff; border: 1px solid #cfd6de; border-radius: 8px; touch-action: pan-y; height: 420px; }
+#tab-lasten.aktiv, #tab-wind.aktiv { grid-template-columns: var(--links, clamp(340px, 38vw, 520px)) 10px minmax(0, 1fr); }
+@media (max-width: 820px) { #tab-lasten.aktiv, #tab-wind.aktiv { grid-template-columns: 1fr !important; } }
+#ed-canvas, #wi-profil, #wi-plan { width: 100%; background: #fff; border: 1px solid #cfd6de; border-radius: 8px; touch-action: pan-y; height: 420px; }
 #tab-lasten .sw-kkopf input[type=text] { font-size: 16px; padding: 3px; min-width: 0; }
 #tab-lasten details > summary { cursor: pointer; font-size: .9rem; margin: .3rem 0; }
 label.cb { display: flex; gap: .5rem; align-items: center; }
 label.cb input { width: auto; }
-#ed-ergebnis { overflow-x: auto; }
+#ed-ergebnis, #wi-ergebnis { overflow-x: auto; }
 #tab-lasten .sw-kfelder { grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); }
 .raster label.cb, label.cb { flex-direction: row; align-items: center; }
 /* Linien-/Streifenlast-Zeilen im Erddruck */
@@ -223,3 +223,15 @@ label.cb input { width: auto; }
 .slotname-eingabe { width: 100%; margin-top: .3rem; font-size: 16px; padding: 3px 6px; }
 .slots-block { margin-bottom: .6rem; }
 .verlauf-knoepfe { display: inline-flex; gap: .3rem; }
+
+/* Rückgängig/Wiederherstellen als Pfeile in der Kopfleiste */
+.kopf-verlauf { margin-left: auto; display: inline-flex; gap: .3rem; }
+.kopf-verlauf[hidden] { display: none; }
+.kopf-verlauf button { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; font-size: 1.25rem; line-height: 1; width: 2.3rem; height: 2.1rem; padding: 0; cursor: pointer; }
+.kopf-verlauf button:hover:not(:disabled) { background: rgba(255,255,255,.3); }
+.kopf-verlauf button:disabled { opacity: .35; cursor: default; }
+
+/* Unternavigation Lastermittlung (Erddruck | Wind) */
+.unternav { display: flex; gap: .4rem; margin-bottom: .6rem; }
+.unternav a { padding: .35rem .9rem; border: 1px solid #1f4e79; border-radius: 6px; color: #1f4e79; text-decoration: none; }
+.unternav a.aktiv { background: #1f4e79; color: #fff; }

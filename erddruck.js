@@ -36,13 +36,29 @@ class Erddruckbeiwerte {
   }
 
   /**
-   * Passiv, gekrümmte Gleitfläche (Log-Spirale), lotrechte Wand, waagerechtes Gelände (Lancellotta 2002):
-   * K_pgh = [cosδ + √(sin²φ − sin²δ)] / (1 − sinφ) · exp(2·θ·tanφ),  θ = ½·[δ + arcsin(sinδ/sinφ)]
+   * Passiv, gekrümmte Gleitflächen nach Pregl/Sokolowski (DIN 4085:2017, Gl. 41-43, Tabelle 3):
+   *   K_pgh (Bodeneigengewicht), K_pph (großflächige Auflast), K_pch (Kohäsion) = cos(δp+α)·K_p,0·i·g·t
+   * Winkel im Bogenmaß; DIN-Vorzeichen: δp = −δ (Wandreibung beim Erdwiderstand negativ), α wie beim aktiven Druck, β > 0 = steigendes Gelände.
+   * Grundwerte K_p,0 (α = β = δp = 0): Rankine-Wert tan²(45°+φ/2) für Eigengewicht und Auflast, 2·tan(45°+φ/2) für Kohäsion
+   * (die Gleichungen 35-37 der Norm lagen nicht vor; die Werte folgen aus dem Sonderfall der glatten, lotrechten Wand).
+   * @returns {{g:number, p:number, c:number}}
    */
-  static passivGekruemmt(phi, delta) {
-    if (phi <= 0) return 1;
-    const d = Math.min(delta, phi), th = 0.5 * (d + Math.asin(Math.sin(d) / Math.sin(phi)));
-    return (Math.cos(d) + Math.sqrt(Math.max(0, Math.sin(phi) ** 2 - Math.sin(d) ** 2))) / (1 - Math.sin(phi)) * Math.exp(2 * th * Math.tan(phi));
+  static passivPregl(phi, delta, beta, alpha = 0) {
+    if (phi <= 0) return { g: 1, p: 1, c: 2 };
+    const dp = -delta, t = Math.tan(phi), kp0 = Math.tan(Math.PI / 4 + phi / 2) ** 2;
+    // Wandreibung i
+    const ipg = dp <= 0 ? (1 - 0.53 * dp) ** (0.26 + 5.96 * phi) : (1 + 0.41 * dp) ** -7.13;
+    const ipp = dp <= 0 ? (1 - 1.33 * dp) ** (0.08 + 2.37 * phi) : (1 - 0.72 * dp) ** 2.81;
+    const ipc = dp <= 0 ? ipp : (1 + 4.46 * dp * t) ** (-1.14 + 0.57 * phi);
+    // Geländeneigung g
+    const gpg = beta <= 0 ? (1 + 0.73 * beta) ** 2.89 : (1 + 0.35 * beta) ** (0.42 + 8.15 * phi);
+    const gpp = beta <= 0 ? (1 + 1.16 * beta) ** 1.57 : (1 + 3.84 * beta) ** (0.98 * phi);
+    const gpc = beta <= 0 ? (1 + 0.001 * beta * t) ** (205.4 + 2232 * phi) : Math.exp(2 * beta * t);
+    // Wandneigung t
+    const tpg = alpha <= 0 ? (1 + 0.72 * alpha * t) ** (-3.51 + 1.03 * phi) : (1 - 0.0012 * alpha * t) ** (2910 - 1958 * phi);
+    const tpp = Math.exp(-2 * alpha * t) / Math.cos(alpha);
+    const cs = Math.cos(dp + alpha);
+    return { g: cs * kp0 * ipg * gpg * tpg, p: cs * kp0 * ipp * gpp * tpp, c: cs * 2 * Math.sqrt(kp0) * ipc * gpc * tpp };
   }
 
   /**
@@ -116,16 +132,80 @@ class Erddruck {
     const b = this.m.beta * GRAD, al = (this.m.alpha || 0) * GRAD, pm = this._phimin();
     return this.m.schichten.map(s => {
       const phi = s.phi * GRAD, del = s.delta * GRAD;
+      const kurv = this.m.gleit === "gekruemmt", pr = kurv ? Erddruckbeiwerte.passivPregl(phi, del, b, al) : null;
       const auto = {
         ka: phi === 0 ? 1 : Erddruckbeiwerte.aktiv(phi, del, b, al),
         k0: phi === 0 ? 1 : Erddruckbeiwerte.ruhe(phi, b),
-        kp: phi === 0 ? 1 : (this.m.gleit === "gekruemmt" && al === 0 && b === 0 ? Erddruckbeiwerte.passivGekruemmt(phi, del) : Erddruckbeiwerte.passiv(phi, del, b, al)),
+        kp: phi === 0 ? 1 : (kurv ? pr.g : Erddruckbeiwerte.passiv(phi, del, b, al)),
       };
+      // Auflast- und Kohäsionsbeiwert des Erdwiderstands: gekrümmt nach Pregl/Sokolowski, sonst Coulomb/Rankine-Form
+      const kpp = kurv ? pr.p : null, kpc = kurv ? pr.c : null;
       const pick = (u, a) => (Number.isFinite(u) && u > 0 ? u : a);
       let kmin = 0;
       if (pm > 0) { const k = Erddruckbeiwerte.aktiv(pm * GRAD, Math.min(del, pm * GRAD), b, al); kmin = Number.isFinite(k) ? k : 0; }
-      return { auto, ka: pick(s.ka, auto.ka), k0: pick(s.k0, auto.k0), kp: pick(s.kp, auto.kp), kmin };
+      const kpv = pick(s.kp, auto.kp), eigen = !(Number.isFinite(s.kp) && s.kp > 0);     // manuell vorgegebenes K_p gilt für alle Anteile
+      return { auto, ka: pick(s.ka, auto.ka), k0: pick(s.k0, auto.k0), kp: kpv, kpp: kurv && eigen ? kpp : kpv, kpc: kurv && eigen ? kpc : 2 * Math.sqrt(kpv), kmin };
     });
+  }
+
+  /**
+   * Ersetzt `stuecke` durch eine neue Erddruckfigur: e(z) = c·shape(z) + zusatz(Schicht), wobei c so gewählt wird, dass der Anteil
+   * c·shape(z) die Kraft E ergibt (Trapezregel über die Teilstücke). Die Segmente `seg` (Schicht-/Wassergrenzen) bleiben als Teilung erhalten;
+   * `knicke` sind zusätzliche Teilungsstellen, `n` die Zahl der Unterteilungen je Segment (für gekrümmte Figuren).
+   */
+  _neuFigur(stuecke, seg, shape, E, { knicke = [], n = 1, zusatz = () => 0 } = {}) {
+    const roh = [];
+    for (const sg of seg) {
+      const kn = [sg.z1, ...knicke.filter(k => k > sg.z1 + 1e-9 && k < sg.z2 - 1e-9), sg.z2];
+      const sv = z => sg.sv1 + (sg.sv2 - sg.sv1) * (z - sg.z1) / (sg.z2 - sg.z1);
+      for (let j = 0; j < kn.length - 1; j++)
+        for (let q = 0; q < n; q++) {
+          const za = kn[j] + (kn[j + 1] - kn[j]) * q / n, zb = kn[j] + (kn[j + 1] - kn[j]) * (q + 1) / n;
+          roh.push({ i: sg.i, z1: za, z2: zb, sv1: sv(za), sv2: sv(zb), e1: shape(za), e2: shape(zb), gam: sg.gam });
+        }
+    }
+    const A = roh.reduce((a, t) => a + (t.e1 + t.e2) / 2 * (t.z2 - t.z1), 0), c = A > 1e-12 ? E / A : 0;
+    for (const t of roh) { t.e1 = c * t.e1 + zusatz(t.i); t.e2 = c * t.e2 + zusatz(t.i); }
+    stuecke.splice(0, stuecke.length, ...roh);
+    return c;
+  }
+
+  /**
+   * Erddruckumlagerung des aktiven Erddrucks aus Bodeneigengewicht (DIN 4085:2017, Tab. C.1); die Kraft E_agh bleibt erhalten:
+   *   b) Parallelverschiebung: oben Dreieck bis 0,5·H, darunter Rechteck (e = 0,67·e^a bei Dreiecksausgangsfigur)
+   *   c) Drehung um den Wandkopf bzw. d) Durchbiegung: Rechteck (e = 0,5·e^a bei Dreiecksausgangsfigur)
+   * Gleichmäßige Auflast p bleibt unverändert (e = K_a·p) und wird nicht umgelagert.
+   */
+  _umlagern(stuecke, seg, K, H, wand, hinweise) {
+    const m = this.m, f = m.faktor, p = m.p || 0, eP = i => f * K[i].ka * p;
+    let Eg = 0;
+    for (const t of stuecke) Eg += ((t.e1 + t.e2) / 2 - eP(t.i)) * (t.z2 - t.z1);
+    Eg = Math.max(Eg, 0);
+    const trap = wand === "b";
+    const c = this._neuFigur(stuecke, seg, trap ? z => Math.min(1, z / (0.5 * H)) : () => 1, Eg, { knicke: trap ? [0.5 * H] : [], zusatz: eP });
+    const text = { b: "b) Parallele Wandbewegung: Dreieck über die obere Hälfte, darunter konstant (E<sub>agh</sub><sup>b</sup> = E<sub>agh</sub><sup>a</sup>)", c: "c) Drehung um den Wandkopf: konstante Verteilung über die Wandhöhe (E<sub>agh</sub><sup>c</sup> = E<sub>agh</sub><sup>a</sup>)", d: "d) Durchbiegung: konstante Verteilung über die Wandhöhe (E<sub>agh</sub><sup>d</sup> ≈ E<sub>agh</sub><sup>a</sup>, Resultierende bei 0,5·h)" }[wand];
+    hinweise.push(`Erddruckumlagerung nach DIN 4085:2017, Tab. C.1 – ${text}; die Kraft aus Bodeneigengewicht bleibt gleich, e<sub>max</sub> = ${fmt(c, 1)} kN/m². Auflast p nicht umgelagert.`);
+  }
+
+  /**
+   * Erdwiderstand bei Wandbewegung a) oder c) (DIN 4085:2017, Tab. D.1, Bezug: Parallelverschiebung b) mit der Dreieckskraft E^b):
+   *   a) Drehung um den Fuß: E^a = k·E^b mit ½ ≤ k ≤ ⅔ (Eingabe), Resultierende bei 0,5·h über dem Fuß → Rechteckverteilung
+   *   c) Drehung um den Kopf: E^c = ⅔·E^b, Resultierende bei 0,2·h über dem Fuß → Verteilung e ∝ z³ (Schwerpunkt 0,2·h über dem Fuß)
+   * Die Normfiguren sind nur skizziert; hier sind Kraft und Angriffshöhe der Tabelle maßgebend.
+   */
+  _umlagernPassiv(stuecke, seg, H, wand, hinweise) {
+    const m = this.m;
+    const Eb = stuecke.reduce((a, t) => a + (t.e1 + t.e2) / 2 * (t.z2 - t.z1), 0);
+    const k = wand === "c" ? 2 / 3 : Math.min(2 / 3, Math.max(0.5, Number.isFinite(m.paf) ? m.paf : 0.5));
+    this._neuFigur(stuecke, seg, wand === "c" ? z => (z / H) ** 3 : () => 1, k * Eb, { n: wand === "c" ? 10 : 1 });
+    hinweise.push(wand === "c"
+      ? "Wandbewegung c) Drehung um den Wandkopf (Tab. D.1): E<sub>pgh</sub><sup>c</sup> ≈ ⅔·E<sub>pgh</sub><sup>b</sup>, Resultierende 0,2·h über dem Fuß (hier e ∝ z³ angesetzt)."
+      : `Wandbewegung a) Drehung um den Wandfuß (Tab. D.1): E<sub>pgh</sub><sup>a</sup> = ${fmt(k, 3)}·E<sub>pgh</sub><sup>b</sup> (zulässig ½ bis ⅔), Resultierende 0,5·h über dem Fuß (hier als Rechteck angesetzt); δ<sub>p,mittel</sub> = ¾·δ<sub>p,min</sub> für E<sub>pgv</sub>.`);
+    hinweise.push("Die genauen Verteilungsfiguren der Tabelle D.1 sind nur skizziert: Kraft und Angriffshöhe stimmen, die Form ist eine Näherung. Abminderung gilt für den gesamten Erdwiderstand.");
+    if (m.dichte > 0 && m.dichte <= 1) {
+      const sh = wand === "c" ? -0.05 * m.dichte + 0.09 : -0.08 * m.dichte + 0.12;
+      hinweise.push(`Erforderliche Wandbewegung (Tab. D.1, D = ${fmt(m.dichte, 2)}): s<sub>p</sub>/h = ${fmt(sh, 3)} → s<sub>p</sub> = ${fmt(sh * H * 100, 1)} cm (Streuung ± 20 %); als Bruchverschiebung s<sub>B</sub> ≈ ${fmt(sh * 100, 1)} % von H eintragbar.`);
+    }
   }
 
   /** Prüfung der Eingaben; liefert einen Fehlertext oder null. */
@@ -180,7 +260,8 @@ class Erddruck {
     let zug = false, minMass = false;
     seg.forEach(sg => {
       const s = m.schichten[sg.i], k = K[sg.i], c = s.c;
-      const fa = v => k.ka * v - 2 * c * Math.sqrt(k.ka), fm = v => k.kmin * v, fp = v => k.kp * v + 2 * c * Math.sqrt(k.kp), f0 = v => k.k0 * v;
+      const fa = v => k.ka * v - 2 * c * Math.sqrt(k.ka), fm = v => k.kmin * v, fp = v => k.kp * (v - m.p) + k.kpp * m.p + c * k.kpc,   // Eigengewicht / Auflast / Kohäsion getrennt (Pregl/Sokolowski)
+             f0 = v => k.k0 * v;
       const ea = v => Math.max(fa(v), fm(v), 0);          // aktiv: nie kleiner als Mindesterddruck bzw. null
       const e = v => f * (art === "aktiv" ? ea(v) : art === "ruhe" ? f0(v) : art === "passiv" ? f0(v) + rho * (fp(v) - f0(v)) : 0.5 * (ea(v) + f0(v)));
       let teile = [[sg.z1, sg.z2, sg.sv1, sg.sv2]];
@@ -199,6 +280,11 @@ class Erddruck {
     if (minMass)
       hinweise.push(`Mindesterddruck maßgebend (Vergleichsrechnung mit φ′ = ${fmt(this._phimin(), 1)}°, c′ = 0): in Bereichen mit Kohäsion wird der Erddruck nach unten begrenzt.`);
 
+    // Art der Wandbewegung (DIN 4085:2017, Tab. C.1 aktiv / D.1 passiv): Erddruckumlagerung
+    const wand = m.wand;
+    if (art === "aktiv" && ["b", "c", "d"].includes(wand)) this._umlagern(stuecke, seg, K, H, wand, hinweise);
+    if (art === "passiv" && (wand === "a" || wand === "c")) this._umlagernPassiv(stuecke, seg, H, wand, hinweise);
+
     // Resultierende (Boden + Auflast): Eh = Σ Trapezflächen, Angriffshöhe über Wandfuß aus dem Moment
     let Eh = 0, Mfuss = 0, Ev = 0;
     for (const t of stuecke) {
@@ -207,7 +293,7 @@ class Erddruck {
       t.E = E; t.zc = zc; Eh += E; Mfuss += E * (H - zc);
       const dl = m.schichten[t.i].delta * GRAD;
       if (art === "aktiv") Ev += E * Math.tan(al + dl);               // + = abwärts auf die Wand
-      if (art === "passiv") Ev += E * Math.tan(al - dl);
+      if (art === "passiv") Ev += E * Math.tan(al - (m.wand === "a" ? 0.75 : 1) * dl);   // Wandbewegung a): δp,mittel = ¾·δp,min
     }
     // Wasserdruck (hydrostatisch, getrennt ausgewiesen)
     const hw = Math.max(0, H - gw), W = 0.5 * GAMMA_W * hw * hw, ezW = hw / 3;
@@ -216,7 +302,7 @@ class Erddruck {
     this._zusaetze(erg);
 
     if (art === "passiv" && rho < 1) hinweise.push(`Mobilisierter Erdwiderstand: ρ = ${fmt(rho, 3)} (s = ${fmt(m.mobS, 1)} cm, s<sub>B</sub> = ${fmt(m.mobSb, 1)} % von H); e = e<sub>0</sub> + ρ·(e<sub>p</sub> − e<sub>0</sub>) (Parabelansatz, Näherung – Mobilisierungsfunktion nach Vogt/DIN 4085 prüfen).`);
-    if (art === "passiv" && m.gleit === "gekruemmt") hinweise.push(((m.alpha || 0) !== 0 || m.beta > 0) ? "Gekrümmte Gleitfläche nur für lotrechte Wand und waagerechtes Gelände implementiert – bei α ≠ 0 oder β &gt; 0 wird die ebene Gleitfläche verwendet." : "Passiv mit gekrümmter Gleitfläche (Log-Spirale nach Lancellotta, Näherung der Caquot-Kérisel-Werte); K<sub>pgh</sub> bei Bedarf mit den Tabellen der DIN 4085 abgleichen.");
+    if (art === "passiv" && m.gleit === "gekruemmt") hinweise.push("Passiv mit gekrümmten Gleitflächen nach Pregl/Sokolowski (DIN 4085:2017, Gl. 41–43, Tab. 3), δ<sub>p</sub> = −δ; K<sub>p,0</sub> = tan²(45°+φ′/2) bzw. 2·tan(45°+φ′/2) für Kohäsion (Gl. 35–37 der Norm nicht geprüft).");
     if (art === "passiv" && m.gleit !== "gekruemmt") hinweise.push("Passiver Erddruck: Coulomb mit ebener Gleitfläche überschätzt K<sub>p</sub> bei δ<sub>p</sub> &gt; φ′/3 (DIN 4085: gekrümmte Gleitfläche). Für Nachweise Beiwerte prüfen oder manuell vorgeben und die zur Mobilisierung nötige Verschiebung beachten.");
     if (art === "erhoeht") hinweise.push("Erhöhter aktiver Erddruck: e = 0,5·(e<sub>a</sub> + e<sub>0</sub>); Wandreibung wird nicht angesetzt (E<sub>v</sub> = 0).");
     if (art === "ruhe") hinweise.push("Ruhedruck: Wandreibung und Wandneigung werden nicht angesetzt (E<sub>v</sub> = 0); Kohäsion bleibt unberücksichtigt.");

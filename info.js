@@ -286,13 +286,56 @@ const INFO = {
     titel: "Wandreibungswinkel δ",
     text: "Statt δ je Schicht einzutragen, kann δ als Anteil von φ′ gewählt werden (0, ⅓, ½, ⅔·φ′ entsprechen den Spalten der Erddruckbeiwert-Tabellen; φ′ für verzahnte Wandflächen). Welcher Anteil zur Wandbeschaffenheit (glatt, rau, verzahnt; aktiv/passiv) gehört, regelt DIN 4085 Anhang A – der Normtext lag hier nicht vor, daher die Zuordnung bitte dort prüfen. Bei gewähltem Anteil sind die δ-Felder der Schichten gesperrt.",
   },
+  windQp: {
+    titel: "Böengeschwindigkeitsdruck q_p(z)",
+    formeln: [
+      "q<sub>p</sub>(z) = f·q<sub>b</sub>·(z/10)<sup>n</sup>·NN<sub>mod</sub> (Mischprofile und Geländekategorien nach NA, Anhang NA.B)",
+      "Binnenland: z ≤ 7 m: 1,5·q<sub>b</sub>; 7–50 m: 1,7·q<sub>b</sub>·(z/10)<sup>0,37</sup>; 50–300 m: 2,1·q<sub>b</sub>·(z/10)<sup>0,24</sup>",
+      "Küste/Ostsee-Inseln: ≤ 4 m: 1,8·q<sub>b</sub>; 4–50 m: 2,3·q<sub>b</sub>·(z/10)<sup>0,27</sup>; 50–300 m: 2,6·q<sub>b</sub>·(z/10)<sup>0,19</sup>",
+      "q<sub>b</sub> (Windzone 1…4) = 0,32 / 0,39 / 0,47 / 0,56 kN/m² (v<sub>b,0</sub> = 22,5 / 25 / 27,5 / 30 m/s)",
+      "NN<sub>mod</sub> = 1 (≤ 800 m ü. NN); 0,2 + H/1000 (800–1100 m)",
+    ],
+    text: "Das genaue Verfahren verwendet die Profilformeln; das vereinfachte Verfahren (Tabelle NA.B.3, h ≤ 25 m) einen konstanten Wert für das ganze Gebäude (Binnenland z. B. Zone 2, h ≤ 10 m: 0,65 kN/m²). Die Zahlen stammen aus der Literatur (u. a. Dlubal-Wissensdatenbank zum NA) und wurden nicht am Normtext selbst geprüft – für Nachweise bitte mit DIN EN 1991-1-4/NA abgleichen. Ausgegeben werden charakteristische Werte (ohne γ<sub>Q</sub>).",
+  },
+  windWand: {
+    titel: "Windlast auf lotrechte Wände",
+    formeln: [
+      "w<sub>e</sub> = q<sub>p</sub>(z<sub>e</sub>)·c<sub>pe</sub>; netto: w = q<sub>p</sub>·(c<sub>pe</sub> − c<sub>pi</sub>)",
+      "e = min(b; 2h); Zonen A = e/5, B = 4e/5 (bzw. d − e/5), C = d − e (Bild 7.5)",
+      "Staffelung Luvwand D (Bild 7.4): h ≤ b: z<sub>e</sub> = h; b < h ≤ 2b: unten z<sub>e</sub> = b, oben z<sub>e</sub> = h; h > 2b: zusätzlich Mittelstreifen (hier mit Streifenoberkante h − b angesetzt)",
+      "c<sub>pe</sub> für h/d = 5, 1, 0,25 aus Tabelle 7.1/NA.1, dazwischen linear; c<sub>pe,10</sub> für Lasteinzugsflächen ≥ 10 m², c<sub>pe,1</sub> für ≤ 1 m²",
+    ],
+    text: "Sogzonen (A, B, C, E) mit q<sub>p</sub>(h). Innendruckbeiwerte ohne dominante Öffnung: c<sub>pi</sub> = +0,2 oder −0,3 (der jeweils ungünstigere wird für „netto“ gewählt). Die Beiwerte stammen aus Sekundärquellen; Zone E bei h/d ≥ 5 (−0,7) und die Zuordnung der Zwischenwerte bitte gegen die Norm prüfen.",
+  },
+  windDach: {
+    titel: "Windlast auf Flachdächer",
+    formeln: [
+      "Zonen F, G, H, I für Wind quer zu b; e = min(b; 2h): F = e/4 × e/10 (zwei Ecken), G = Randstreifen e/10, H bis e/2, I Rest (Bild 7.6)",
+      "c<sub>pe,10</sub> / c<sub>pe,1</sub> scharfkantig: F −1,8/−2,5; G −1,2/−2,0; H −0,7/−1,2; I ±0,2",
+      "mit Attika h<sub>p</sub>/h = 0,025 / 0,05 / 0,10: F −1,6/−1,4/−1,2 (c<sub>pe,10</sub>); G −1,1/−0,9/−0,8; dazwischen linear; z<sub>e</sub> = h + h<sub>p</sub>",
+    ],
+    text: "Nur Flachdächer (−5° bis +5°); abgerundete oder abgeschrägte Traufen, Pult-, Sattel- und Walmdächer sind nicht enthalten. Werte aus Sekundärquellen – vor Verwendung gegen DIN EN 1991-1-4/NA prüfen.",
+  },
+  erdWand: {
+    titel: "Art der Wandbewegung / Erddruckumlagerung",
+    formeln: [
+      "aktiv (Tab. C.1): a) Drehung um den Fuß: Dreieck; b) Parallelverschiebung: Dreieck bis 0,5·h, darunter konstant, e<sup>b</sup> = 0,67·e<sup>a</sup>; c) Drehung um den Kopf und d) Durchbiegung: konstant, e = 0,5·e<sup>a</sup>; stets E<sup>b,c,d</sup> = E<sup>a</sup>",
+      "erforderliche Wandbewegung s<sub>a</sub>/h (locker / dicht): a) 0,004–0,005 / 0,001–0,002; b) 0,002–0,003 / 0,0005–0,001; c) 0,008–0,01 / 0,002–0,005; d) 0,004–0,005 / 0,001–0,002",
+      "passiv (Tab. D.1, Bezug b) Parallelverschiebung, Dreieck, Resultierende 0,33·h): a) ½·E<sup>b</sup> ≤ E<sup>a</sup> ≤ ⅔·E<sup>b</sup>, Resultierende 0,5·h, δ<sub>p,mittel</sub> = ¾·δ<sub>p,min</sub>; c) E<sup>c</sup> ≈ ⅔·E<sup>b</sup>, Resultierende 0,2·h; s<sub>p</sub>/h = −0,08·D + 0,12 (a, b) bzw. −0,05·D + 0,09 (c), D &gt; 0,3",
+    ],
+    text: "Die Umlagerung betrifft den Erddruck aus Bodeneigengewicht; die Resultierende bleibt (aktiv) unverändert, nur ihre Verteilung ändert sich. Gleichmäßige Auflast p wird nicht umgelagert, Linien-/Streifenlasten folgen Tab. C.2. Werte der Tabellen C.1 und D.1 wurden aus einem Normauszug abgelesen; passiv sind Kraft und Angriffshöhe der Tabelle D.1 umgesetzt; die Form der Figuren a) (Rechteck) und c) (e ∝ z³) ist eine Näherung dazu.",
+    normen: ["DIN 4085:2017, Tab. C.1, Tab. D.1, Gl. (44), (45)"],
+  },
   erdPassiv: {
     titel: "Passiver Erddruck",
     formeln: [
-      "gekrümmt (lotrechte Wand, waagerechtes Gelände): K<sub>pgh</sub> = (cosδ + √(sin²φ′ − sin²δ))/(1 − sinφ′)·e<sup>2θ·tanφ′</sup>, θ = ½·[δ + arcsin(sinδ/sinφ′)]",
-      "mobilisiert: e = e<sub>0</sub> + ρ·(e<sub>p</sub> − e<sub>0</sub>), ρ = 1 − (1 − s/s<sub>B</sub>)²",
+      "gekrümmte Gleitflächen (Pregl/Sokolowski, DIN 4085:2017 Gl. 41–43): K<sub>pgh</sub> = cos(δ<sub>p</sub>+α)·K<sub>pg,0</sub>·i<sub>pg</sub>·g<sub>pg</sub>·t<sub>pg</sub> (analog K<sub>pph</sub> für Auflast, K<sub>pch</sub> für Kohäsion)",
+      "e<sub>ph</sub> = (σ′<sub>v</sub> − p)·K<sub>pgh</sub> + p·K<sub>pph</sub> + c′·K<sub>pch</sub>",
+      "z. B. i<sub>pg</sub> = (1 − 0,53·δ<sub>p</sub>)<sup>0,26+5,96·φ′</sup> (δ<sub>p</sub> ≤ 0), g<sub>pg</sub> = (1 + 0,35·β)<sup>0,42+8,15·φ′</sup> (β > 0), t<sub>pp</sub> = e<sup>−2α·tanφ′</sup>/cosα; Winkel im Bogenmaß",
+      "δ<sub>p</sub> = −δ (Wandreibung beim Erdwiderstand negativ); Grundwerte (α = β = δ<sub>p</sub> = 0): K<sub>pg,0</sub> = K<sub>pp,0</sub> = tan²(45°+φ′/2), K<sub>pc,0</sub> = 2·tan(45°+φ′/2)",
+      "eben (Coulomb/Müller-Breslau): K<sub>pgh</sub> = cos²(φ′+α)/(cos²α·[1 − √(sin(φ′+δ)·sin(φ′+β)/(cos(α−δ)·cos(α−β)))]²)",
     ],
-    text: "Die ebene Gleitfläche überschätzt K<sub>p</sub> bei großem δ; die Log-Spirale (Näherung nach Lancellotta) liefert Werte nahe den Caquot-Kérisel-Tafeln. Bei α ≠ 0 oder β > 0 wird auf Coulomb zurückgegriffen. Die Mobilisierung ist ein einfacher Parabelansatz mit Bruchverschiebung s<sub>B</sub> als Anteil der Wandhöhe – NICHT die Originalfunktion nach Vogt (nicht verfügbar); Funktion und s<sub>B</sub> bitte mit DIN 4085/EAB abgleichen.",
+    text: "Die ebene Gleitfläche überschätzt K<sub>p</sub> bei großem δ; der Ansatz nach Pregl/Sokolowski (DIN 4085:2017, Tabelle 3) gilt auch für geneigte Wände und Gelände. Die Grundwerte K<sub>p,0</sub> (Gl. 35–37) lagen nicht vor und sind aus dem Sonderfall der glatten, lotrechten Wand abgeleitet; die Tabellenfaktoren wurden von der Normseite übernommen. Die Mobilisierung ist ein einfacher Parabelansatz mit Bruchverschiebung s<sub>B</sub> als Anteil der Wandhöhe – NICHT die Originalfunktion nach Vogt (nicht verfügbar); Funktion und s<sub>B</sub> bitte mit DIN 4085/EAB abgleichen.",
   },
   erdSchicht: {
     titel: "Bodenschichten",
@@ -321,7 +364,7 @@ const INFO = {
   swEigengewicht: {
     titel: "Eigengewicht der Stäbe",
     formeln: ["g = A·γ  [kN/m] je m Stablänge, Richtung global Z (nach unten)"],
-    text: "Das Eigengewicht wird aus der Querschnittsfläche und der Wichte des Materials berechnet (Stahl 78,5, Beton 25, Brettschichtholz 4,2–4,5 kN/m³, Aluminium 27 kN/m³; bei „eigenes Material“ frei wählbar, bei Stäben mit „manuell“ über die Wichte unter den Stäben). Es wird als Streckenlast über die ganze Stablänge der ersten ständigen Einwirkung (Art G) zugeordnet und grau dargestellt. Gevoutete Stäbe: mittlere Fläche. Bettung und Lagerreaktionen bleiben unberührt. Tabellenwerte der Wichte nach EN 1991-1-1, Anhang A – bei Bedarf anpassen.",
+    text: "Das Eigengewicht wird aus der Querschnittsfläche und der Wichte des Materials berechnet (Stahl 78,5, Beton 25, Brettschichtholz 4,2–4,5 kN/m³, Aluminium 27 kN/m³; bei „eigenes Material“ frei wählbar, bei Stäben mit „manuell“ über die Wichte unter den Stäben). Es wird als Streckenlast über die ganze Stablänge der ersten ständigen Einwirkung (Art G) zugeordnet und grau dargestellt. Gevoutete Stäbe: das Eigengewicht verläuft linear von A_Anfang·γ bis A_Ende·γ (veränderliche Streckenlast). Bettung und Lagerreaktionen bleiben unberührt. Tabellenwerte der Wichte nach EN 1991-1-1, Anhang A – bei Bedarf anpassen.",
     normen: ["DIN EN 1991-1-1 mit NA, Anhang A (Wichten)"],
   },
   swTsb: {

@@ -314,7 +314,7 @@ class StabwerkZeichnung {
   _lasten(g, m, stab, P, sk) {
     const FARBE = "#d35400", EG = "#7f8c8d", MAXL = 64;
     const ab = v => (Number.isFinite(v) ? Math.abs(v) : 0);
-    const qmax = Math.max(1e-9, ...m.strecken.map(l => ab(l.q)));
+    const qmax = Math.max(1e-9, ...m.strecken.flatMap(l => [ab(l.q), ab(l.q2)]));
     const fmax = Math.max(1e-9, ...m.einzel.map(l => ab(l.F)), ...m.knotenlasten.flatMap(l => [ab(l.Fx), ab(l.Fz)]));
     const lq = q => Math.max(8, MAXL * ab(q) / qmax), lf = F => Math.max(10, MAXL * ab(F) / fmax);
     const richt = (st, r) => {            // Einheitsvektor der Lastrichtung (global, Z nach unten)
@@ -323,19 +323,26 @@ class StabwerkZeichnung {
       return [0, 1];
     };
     for (const l of m.strecken) {
-      const st = stab[l.s - 1]; if (!st || !Number.isFinite(l.q) || l.q === 0) continue;
-      const f = l.eg ? EG : FARBE, LEN = lq(l.q);
-      const [dx, dz] = richt(st, l.richtung), sg = Math.sign(l.q);
+      const st = stab[l.s - 1]; if (!st || !Number.isFinite(l.q)) continue;
+      const q2 = Number.isFinite(l.q2) ? l.q2 : l.q;                // Endwert (ohne Angabe: konstant)
+      if (l.q === 0 && q2 === 0) continue;
+      const f = l.eg ? EG : FARBE;
+      const [dx, dz] = richt(st, l.richtung);
       const n = Math.max(2, Math.min(10, Math.round(st.L * Math.max(0.05, Math.min(1, (Number.isFinite(l.b) ? l.b : st.L) - (l.a || 0)) / st.L) * sk / 28)));
       const pts = [], t0 = Math.max(0, Number.isFinite(l.a) ? l.a / st.L : 0), t1 = Math.min(1, Number.isFinite(l.b) ? l.b / st.L : 1);
       if (!(t1 > t0)) continue;
       for (let i = 0; i <= n; i++) {
         const t = t0 + (t1 - t0) * i / n;
         const [x, y] = P(st.a.x + (st.b.x - st.a.x) * t, st.a.z + (st.b.z - st.a.z) * t);
-        this._pfeil(g, x - dx * sg * LEN, y - dz * sg * LEN, x, y, f); pts.push([x - dx * sg * LEN, y - dz * sg * LEN]);
+        // Lastordinate an dieser Stelle (linear zwischen q bei a und q2 bei b)
+        const aa = Number.isFinite(l.a) ? l.a : 0, bb = Number.isFinite(l.b) ? l.b : st.L;
+        const qi = bb > aa ? l.q + (q2 - l.q) * Math.max(0, Math.min(1, (t * st.L - aa) / (bb - aa))) : l.q;
+        const LEN = Math.abs(qi) < 1e-12 ? 0 : lq(qi), sg = Math.sign(qi);
+        if (LEN > 0) this._pfeil(g, x - dx * sg * LEN, y - dz * sg * LEN, x, y, f);
+        pts.push([x - dx * sg * LEN, y - dz * sg * LEN]);
       }
       g.strokeStyle = f; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(...p) : g.moveTo(...p)); g.stroke();
-      g.fillStyle = f; g.textAlign = "center"; g.fillText(`${fmt(l.q, 2)} kN/m${l.eg ? " (EG)" : this._id(l)}`, (pts[0][0] + pts[n][0]) / 2, (pts[0][1] + pts[n][1]) / 2 - 5);
+      g.fillStyle = f; g.textAlign = "center"; g.fillText(`${fmt(l.q, 2)}${q2 !== l.q ? " → " + fmt(q2, 2) : ""} kN/m${l.eg ? " (EG)" : this._id(l)}`, (pts[0][0] + pts[n][0]) / 2, (pts[0][1] + pts[n][1]) / 2 - 5);
     }
     for (const l of m.einzel) {
       const st = stab[l.s - 1]; if (!st || !Number.isFinite(l.F) || l.F === 0 || !Number.isFinite(l.a)) continue;
@@ -559,8 +566,8 @@ class StatikSeite {
       () => ({ k: 1, Fx: 0, Fz: 0, M: 0, ew: "1" }), bei, "Knotenlast");
     this.edStr = new ZeilenEditor(document.getElementById("sw-str"),
       [{ k: "s", l: "Stab" }, { k: "q", l: "q [kN/m]" }, { k: "a", l: "von [m]" }, { k: "b", l: "bis [m]", platz: "Ende" },
-       { k: "richtung", l: "Richtung", opt: RICHTUNGEN }, ew()],
-      () => ({ s: 1, q: 10, a: 0, b: NaN, richtung: "Z", ew: "1" }), bei, "Streckenlast");
+       { k: "q2", l: "q Ende [kN/m]", platz: "= q" }, { k: "richtung", l: "Richtung", opt: RICHTUNGEN }, ew()],
+      () => ({ s: 1, q: 10, a: 0, b: NaN, q2: NaN, richtung: "Z", ew: "1" }), bei, "Streckenlast");
     this.edEin = new ZeilenEditor(document.getElementById("sw-ein"),
       [{ k: "s", l: "Stab" }, { k: "F", l: "F [kN]" }, { k: "a", l: "a [m]" }, { k: "richtung", l: "Richtung", opt: RICHTUNGEN }, ew()],
       () => ({ s: 1, F: 10, a: 1, richtung: "Z", ew: "1" }), bei, "Einzellast");
@@ -601,7 +608,6 @@ class StatikSeite {
     this.verlauf = new Verlauf({
       holen: () => JSON.stringify(this.modell()),
       setzen: t => { this.lade(JSON.parse(t)); this.aktualisiere(); },
-      undo: document.getElementById("sw-undo"), redo: document.getElementById("sw-redo"),
     });
 
     // Übernahme der Schnittgrößen in Stahlbau / Massivbau
@@ -642,7 +648,7 @@ class StatikSeite {
       staebe: [1, 2, 3].map(n => ({ i: n, j: n + 1, q: "1", A: 53.8, I: 8356, gel: "-" })),
       gruppen: [StatikSeite.neueEinwirkung("G"), w("Nutzlast Büro", "B"), w("Wind", "W")],
       knotenlasten: [{ k: 2, Fx: 10, Fz: 0, M: 0, ew: "3" }],
-      strecken: [{ s: 2, q: 12, a: 0, b: NaN, richtung: "Z", ew: "1" }, { s: 2, q: 8, a: 1.5, b: 4.5, richtung: "Z", ew: "2" }], einzel: [],
+      strecken: [{ s: 2, q: 12, a: 0, b: NaN, q2: NaN, richtung: "Z", ew: "1" }, { s: 2, q: 8, a: 1.5, b: 4.5, q2: NaN, richtung: "Z", ew: "2" }], einzel: [],
       tsb: "strgeo",
     };
   }
@@ -667,7 +673,8 @@ class StatikSeite {
     const eg = [];                                               // automatische Eigengewichtslasten
     const gi = m.gruppen.findIndex(g => g.art === "G") + 1;      // Einwirkung für das Eigengewicht: erste ständige
     if (m.eg && !gi) throw new Error("Eigengewicht: Es ist keine ständige Einwirkung (Art G) vorhanden.");
-    const egLast = (n, A, gam) => { if (m.eg && A > 0 && gam > 0) eg.push({ s: n + 1, q: +(A * 1e-4 * gam).toFixed(4), a: 0, b: NaN, richtung: "Z", ew: gi, eg: true }); };
+    // A2: Fläche am Stabende (Voute) -> Eigengewicht linear veränderlich von A·γ bis A2·γ
+    const egLast = (n, A, gam, A2 = A) => { if (m.eg && A > 0 && A2 > 0 && gam > 0) eg.push({ s: n + 1, q: +(A * 1e-4 * gam).toFixed(4), q2: +(A2 * 1e-4 * gam).toFixed(4), a: 0, b: NaN, richtung: "Z", ew: gi, eg: true }); };
     const staebe = m.staebe.map((s, n) => {
       const q = Number(s.q) || 0; if (!q) { egLast(n, Number(s.A), m.gam); return { ...s }; }
       const k = QuerschnittsListe.kennwerte(this.qsListe.liste[q - 1] || { typ: "" });
@@ -684,7 +691,7 @@ class StatikSeite {
         const v = QuerschnittsListe.voute(this.qsListe.liste[q - 1], q1);
         if (v.fehler) throw new Error(`Stab ${n + 1}: ${v.fehler}.`);
         s.voute = { h0: v.h0, h1: v.h1 };
-        egLast(n, (k.A + k1.A) / 2, k.gamma);                // Voute: mittlere Fläche (Trapez, Gesamtgewicht exakt)
+        egLast(n, k.A, k.gamma, k1.A);                      // Voute: Eigengewicht linear von A_Anfang·γ bis A_Ende·γ
         return { ...s, A: k.A, I: k.I, E: k.E, seg: v.seg };
       }
       egLast(n, k.A, k.gamma);
@@ -765,7 +772,7 @@ class StatikSeite {
     };
   }
 
-  zeige() { this.aktualisiere(); }
+  zeige() { Kopfleiste.setze(this.verlauf); this.aktualisiere(); }
 
   /** Kombination wählen, rechnen und anzeigen. */
   aktualisiere() {

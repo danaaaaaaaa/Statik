@@ -4,15 +4,18 @@
  */
 class Verlauf {
   /**
-   * @param {{holen:()=>string, setzen:(s:string)=>void, undo:HTMLButtonElement, redo:HTMLButtonElement}} opt
+   * @param {{holen:()=>string, setzen:(s:string)=>void}} opt
    *   holen: aktueller Zustand als Text; setzen: Zustand wiederherstellen (ruft selbst die Seite neu auf)
    */
   constructor(opt) {
     this.o = opt; this.stapel = []; this.pos = -1; this.t = 0; this.sperre = false;
-    opt.undo.addEventListener("click", () => this._gehe(this.pos - 1));
-    opt.redo.addEventListener("click", () => this._gehe(this.pos + 1));
     this._knoepfe();
   }
+
+  rueckgaengig() { this._gehe(this.pos - 1); }
+  wiederherstellen() { this._gehe(this.pos + 1); }
+  get kannRueckgaengig() { return this.pos > 0; }
+  get kannWiederherstellen() { return this.pos < this.stapel.length - 1; }
 
   /** Verlauf leeren (z. B. beim Wechsel des Speicherplatzes); der nächste merke()-Aufruf setzt den Ausgangszustand. */
   neu() { this.stapel = []; this.pos = -1; this.t = 0; this._knoepfe(); }
@@ -36,5 +39,35 @@ class Verlauf {
     this._knoepfe();
   }
 
-  _knoepfe() { this.o.undo.disabled = this.pos <= 0; this.o.redo.disabled = this.pos >= this.stapel.length - 1; }
+  _knoepfe() { Kopfleiste.aktualisiere(this); }
+}
+
+/**
+ * Die beiden Pfeilknöpfe in der Kopfleiste. Sie wirken auf den Verlauf der gerade angezeigten Seite
+ * (Seiten ohne Verlauf blenden sie aus).
+ */
+class Kopfleiste {
+  static init() {
+    Kopfleiste.box = document.getElementById("kopf-verlauf");
+    Kopfleiste.undo = document.getElementById("kopf-undo"); Kopfleiste.redo = document.getElementById("kopf-redo");
+    Kopfleiste.undo.addEventListener("click", () => Kopfleiste.verlauf && Kopfleiste.verlauf.rueckgaengig());
+    Kopfleiste.redo.addEventListener("click", () => Kopfleiste.verlauf && Kopfleiste.verlauf.wiederherstellen());
+    // Tastenkürzel Strg/Cmd+Z bzw. +Y / Umschalt+Z (nicht in Textfeldern, dort gilt das Rückgängig des Feldes)
+    document.addEventListener("keydown", e => {
+      if (!(e.ctrlKey || e.metaKey) || !Kopfleiste.verlauf || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ""))) return;
+      const z = e.key.toLowerCase();
+      if (z === "z" && !e.shiftKey) { e.preventDefault(); Kopfleiste.verlauf.rueckgaengig(); }
+      else if (z === "y" || (z === "z" && e.shiftKey)) { e.preventDefault(); Kopfleiste.verlauf.wiederherstellen(); }
+    });
+  }
+
+  /** Verlauf der angezeigten Seite setzen (null = Seite ohne Rückgängig-Funktion) */
+  static setze(v) { Kopfleiste.verlauf = v; Kopfleiste.aktualisiere(v); }
+
+  /** Knopfzustand aktualisieren, wenn v der aktive Verlauf ist */
+  static aktualisiere(v) {
+    if (!Kopfleiste.box || v !== Kopfleiste.verlauf) return;
+    Kopfleiste.box.hidden = !v;
+    if (v) { Kopfleiste.undo.disabled = !v.kannRueckgaengig; Kopfleiste.redo.disabled = !v.kannWiederherstellen; }
+  }
 }
