@@ -124,8 +124,9 @@ class ErddruckZeichnung {
     // Werte an den Knickpunkten
     g.fillStyle = "#111"; g.lineWidth = 1; g.textAlign = "left"; g.font = "11px system-ui, sans-serif";
     let ly = -99;
+    const abst = erg.stuecke.length > 30 ? 28 : 12;          // fein unterteilte Verläufe (Vogt): weniger Beschriftungen
     const marke = (e, zz, abov) => {
-      if (e < 1e-6 || Math.abs(Y(zz) - ly) < 12) return;
+      if (e < 1e-6 || Math.abs(Y(zz) - ly) < abst) return;
       ly = Y(zz); g.fillText(fmt(e, 1), x0 + e * sk + 4, Y(zz) + (abov ? -3 : 11));
     };
     erg.stuecke.forEach(t => { marke(t.e1, t.z1, false); marke(t.e2, t.z2, true); });
@@ -266,7 +267,7 @@ class ErddruckSeite {
     const bei = () => this.aktualisiere();
     this.linien = new ZeilenListe(document.getElementById("ed-linien"), [{ k: "Q", label: "Q [kN/m]", wert: 50 }, { k: "a", label: "Abstand a [m]", wert: 1.5 }], "+ Linienlast", bei);
     this.streifen = new ZeilenListe(document.getElementById("ed-streifen"), [{ k: "q", label: "q [kN/m²]", wert: 20 }, { k: "a", label: "Abstand a [m]", wert: 1 }, { k: "b", label: "Breite b [m]", wert: 2 }], "+ Streifenlast", bei);
-    ["ed-art", "ed-faktor", "ed-beta", "ed-alpha", "ed-p", "ed-gw", "ed-wasser", "ed-phimin", "ed-verd", "ed-delta", "ed-gleit", "ed-mobs", "ed-mobsb", "ed-wand", "ed-paf", "ed-dichte"].forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
+    ["ed-art", "ed-faktor", "ed-beta", "ed-alpha", "ed-p", "ed-gw", "ed-wasser", "ed-phimin", "ed-verd", "ed-delta", "ed-gleit", "ed-mobs", "ed-mobsb", "ed-wand", "ed-paf", "ed-dichte", "ed-mobart", "ed-vogta"].forEach(id => document.getElementById(id).addEventListener("input", () => this.aktualisiere()));
     document.getElementById("ed-beispiel").addEventListener("click", () => { this.lade(ErddruckSeite.BEISPIEL()); this.aktualisiere(); });
     window.addEventListener("resize", () => { if (document.getElementById("tab-lasten").classList.contains("aktiv")) this.aktualisiere(); });
     // Speicherplätze (benennbar); der frühere Einzelspeicher wird als Startwert übernommen
@@ -318,6 +319,8 @@ class ErddruckSeite {
     document.getElementById("ed-dichte").value = Number.isFinite(m.dichte) ? m.dichte : "";
     document.getElementById("ed-mobs").value = Number.isFinite(m.mobS) ? m.mobS : "";
     document.getElementById("ed-mobsb").value = Number.isFinite(m.mobSb) ? m.mobSb : 10;
+    document.getElementById("ed-mobart").value = m.mobart || "parabel";
+    document.getElementById("ed-vogta").value = Number.isFinite(m.vogtA) ? m.vogtA : 0.02;
     this.linien.setze(m.linien || []); this.streifen.setze(m.streifen || []);
     this.schichten.setze(m.schichten);
   }
@@ -329,7 +332,7 @@ class ErddruckSeite {
       gw: v("ed-gw"), wasser: document.getElementById("ed-wasser").checked, schichten: this.schichten.liste,
       alpha: v("ed-alpha") || 0, phimin: v("ed-phimin"), verd: v("ed-verd") || 0,
       deltaAnteil: DELTA_ANTEILE[document.getElementById("ed-delta").value], gleit: document.getElementById("ed-gleit").value,
-      mobS: v("ed-mobs"), mobSb: v("ed-mobsb"), wand: document.getElementById("ed-wand").value, paf: v("ed-paf"), dichte: v("ed-dichte"), linien: this.linien.liste, streifen: this.streifen.liste,
+      mobS: v("ed-mobs"), mobSb: v("ed-mobsb"), wand: document.getElementById("ed-wand").value, paf: v("ed-paf"), mobart: document.getElementById("ed-mobart").value, vogtA: v("ed-vogta"), dichte: v("ed-dichte"), linien: this.linien.liste, streifen: this.streifen.liste,
     };
   }
 
@@ -349,6 +352,9 @@ class ErddruckSeite {
 
   aktualisiere() {
     this._wandOptionen(document.getElementById("ed-art").value, document.getElementById("ed-wand").value);
+    const vg = document.getElementById("ed-mobart").value === "vogt";                // Vogt: α-Feld, s_B nicht nötig
+    document.getElementById("ed-vogta-label").hidden = !vg;
+    document.getElementById("ed-mobsb").parentElement.hidden = vg;
     const m = this.modell(), box = document.getElementById("ed-ergebnis");
     if (this.speicher) this.speicher.sichern();
     const rechner = new Erddruck(m), erg = rechner.berechne();

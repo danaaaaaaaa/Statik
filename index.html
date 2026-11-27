@@ -80,11 +80,13 @@
           <label><span>Grundwasser, Tiefe unter OK [m] (leer = keins)</span><input type="number" id="ed-gw" value="" min="0" step="any"></label>
           <label class="cb" style="grid-column:1 / -1"><input type="checkbox" id="ed-wasser" checked> Wasserdruck zusätzlich ausweisen</label>
         </div>
-        <h2>Passiver Erddruck <button type="button" class="info" data-info="erdPassiv">i</button></h2>
+        <h2>Passiver Erddruck <button type="button" class="info" data-info="erdPassiv">i</button> <button type="button" class="info" data-info="erdVogt">i</button></h2>
         <div class="raster">
           <label><span>Gleitfläche</span><select id="ed-gleit"><option value="eben">eben (Coulomb)</option><option value="gekruemmt">gekrümmt (Pregl/Sokolowski)</option></select></label>
           <label><span>Lagerungsdichte D [–] (0,3…1; für s<sub>p</sub>/h nach Tab. D.1)</span><input type="number" id="ed-dichte" value="" min="0" max="1" step="any"></label>
-          <label><span>Verschiebung s [cm] (leer = voll mobilisiert)</span><input type="number" id="ed-mobs" value="" min="0" step="any"></label>
+          <label><span>Mobilisierung</span><select id="ed-mobart"><option value="parabel">Parabelansatz (s, s<sub>B</sub>)</option><option value="vogt">nach Vogt (RE-ING, Kopfverschiebung s<sub>h</sub>)</option></select></label>
+          <label id="ed-vogta-label" hidden><span>Beiwert α (Vogt; RiZ Was 7: 0,02)</span><input type="number" id="ed-vogta" value="0.02" min="0" step="any"></label>
+          <label><span>Verschiebung s bzw. s<sub>h</sub> [cm] (leer = voll mobilisiert)</span><input type="number" id="ed-mobs" value="" min="0" step="any"></label>
           <label><span>Bruchverschiebung s<sub>B</sub> [% von H]</span><input type="number" id="ed-mobsb" value="10" min="0" step="any"></label>
         </div>
         <h2>Linienlasten (Abstand von der Wand)</h2>

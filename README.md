@@ -145,3 +145,4 @@ St.-Venant-Torsion: Eingabe T [kNm] je Reiter, Kennwerte I_t/W_t (I, U, T, Hohlp
 - Lastermittlung › Wind (wind.js): q_p(z) nach EC 1-4/NA DE (Windzonen 1–4, Mischprofile, Kategorien, vereinfachtes Verfahren), Wandzonen A–E mit Staffelung, Flachdach F–I, Innendruck, Grundriss/Profil-Skizze.
 - Passiver Erddruck: gekrümmte Gleitflächen nach Pregl/Sokolowski (DIN 4085:2017 Gl. 41–43, Tab. 3) mit K_pgh, K_pph, K_pch, gültig auch für α ≠ 0 und β ≠ 0 (ersetzt die Log-Spirale).
 - Erddruck: Art der Wandbewegung (DIN 4085:2017 Tab. C.1 aktiv: a–d mit Umlagerung bei gleicher Kraft; Tab. D.1 passiv: a–c mit Kraftabminderung).
+- Erddruck: mobilisierter Erdwiderstand nach Vogt (RE-ING Teil 2, 2.3, Gl. 1/2) als Alternative zum Parabelansatz.

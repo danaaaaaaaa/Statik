@@ -316,6 +316,16 @@ const INFO = {
     ],
     text: "Nur Flachdächer (−5° bis +5°); abgerundete oder abgeschrägte Traufen, Pult-, Sattel- und Walmdächer sind nicht enthalten. Werte aus Sekundärquellen – vor Verwendung gegen DIN EN 1991-1-4/NA prüfen.",
   },
+  erdVogt: {
+    titel: "Mobilisierter Erdwiderstand nach Vogt (RE-ING)",
+    formeln: [
+      "K<sub>ph,mob</sub>(z) = K<sub>0</sub> + (K<sub>ph</sub> − K<sub>0</sub>)·(v(z)/z) / (α + v(z)/z)",
+      "starre Wand, Fußpunktdrehung: v(z) = s<sub>h</sub>·(1 − z/h); e<sub>ph,mob</sub>(z) = K<sub>ph,mob</sub>(z)·γ·z",
+      "α = 0,02 für Hinterfüllung nach RiZ Was 7; im Grenzzustand der Gebrauchstauglichkeit s<sub>h</sub> ≤ 1 % von h",
+    ],
+    text: "K<sub>ph</sub> mit δ = −⅔·φ′ (bei φ′ ≥ 30° gekrümmte Gleitfläche, DIN 4085 oder Caquot-Kérisel). Die Pregl-Werte liegen etwas unter den Caquot-Kérisel-Werten (z. B. φ′ = 35°, δ = −⅔φ′: 7,3 gegenüber etwa 8); bei Bedarf K<sub>p</sub> je Schicht manuell vorgeben. Der Ansatz gilt für den Anteil aus Bodeneigengewicht; er wird hier auch auf Auflast und Kohäsion angewendet.",
+    normen: ["RE-ING Teil 2 Brücken, Abschnitt 5, 2.3, Gl. (1), (2); Vogt"],
+  },
   erdWand: {
     titel: "Art der Wandbewegung / Erddruckumlagerung",
     formeln: [
@@ -323,7 +333,7 @@ const INFO = {
       "erforderliche Wandbewegung s<sub>a</sub>/h (locker / dicht): a) 0,004–0,005 / 0,001–0,002; b) 0,002–0,003 / 0,0005–0,001; c) 0,008–0,01 / 0,002–0,005; d) 0,004–0,005 / 0,001–0,002",
       "passiv (Tab. D.1, Bezug b) Parallelverschiebung, Dreieck, Resultierende 0,33·h): a) ½·E<sup>b</sup> ≤ E<sup>a</sup> ≤ ⅔·E<sup>b</sup>, Resultierende 0,5·h, δ<sub>p,mittel</sub> = ¾·δ<sub>p,min</sub>; c) E<sup>c</sup> ≈ ⅔·E<sup>b</sup>, Resultierende 0,2·h; s<sub>p</sub>/h = −0,08·D + 0,12 (a, b) bzw. −0,05·D + 0,09 (c), D &gt; 0,3",
     ],
-    text: "Die Umlagerung betrifft den Erddruck aus Bodeneigengewicht; die Resultierende bleibt (aktiv) unverändert, nur ihre Verteilung ändert sich. Gleichmäßige Auflast p wird nicht umgelagert, Linien-/Streifenlasten folgen Tab. C.2. Werte der Tabellen C.1 und D.1 wurden aus einem Normauszug abgelesen; passiv sind Kraft und Angriffshöhe der Tabelle D.1 umgesetzt; die Form der Figuren a) (Rechteck) und c) (e ∝ z³) ist eine Näherung dazu.",
+    text: "Die Umlagerung betrifft den Erddruck aus Bodeneigengewicht; die Resultierende bleibt (aktiv) unverändert, nur ihre Verteilung ändert sich. Gleichmäßige Auflast p wird nicht umgelagert, Linien-/Streifenlasten folgen Tab. C.2. Werte der Tabellen C.1 und D.1 wurden aus einem Normauszug abgelesen; passiv sind Kraft und Angriffshöhe der Tabelle D.1 umgesetzt; a) ist ein symmetrisches Dreieck (null an Kopf und Fuß, Spitze bei 0,5·h), c) eine konkave Kurve (hier e ∝ z³ mit Resultierender bei 0,2·h, Kurvenform angenähert).",
     normen: ["DIN 4085:2017, Tab. C.1, Tab. D.1, Gl. (44), (45)"],
   },
   erdPassiv: {
